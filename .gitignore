@@ -1,0 +1,17 @@
+node_modules
+.output
+.vinxi
+.nitro
+.tanstack
+.local
+.data
+dist
+.vercel
+.env
+.env.*
+*.log
+.DS_Store
+screenshots
+artifacts
+.project_id
+.pglite
