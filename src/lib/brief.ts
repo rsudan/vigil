@@ -52,6 +52,7 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   parts.push(`# ${s.title}`);
   parts.push("");
   parts.push(`Domain: ${s.domain || "—"}`);
+  if (s.jurisdiction) parts.push(`Jurisdiction: ${s.jurisdiction}`);
   if (s.language) parts.push(`Document language: ${s.language}`);
   parts.push(`Horizon: ${s.horizon_start ?? "—"} to ${s.horizon_end ?? "—"}`);
   parts.push(`Generated: ${new Date().toISOString().slice(0, 10)}`);
@@ -124,6 +125,9 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   }
   parts.push("## Analysis by category");
   parts.push("Each strategy is read through the same ten rooms. An empty room is a blind spot, not calm.");
+  if (!bundle.documents.length) {
+    parts.push("No document is stored for this strategy, so no room can say what the strategy text says.");
+  }
   parts.push("");
   for (const r of analyzeAllCategories(bundle)) {
     parts.push(`### ${r.id}. ${r.short} — ${r.name}`);
@@ -160,6 +164,41 @@ export function analysisMarkdown(bundle: StrategyBundle) {
       parts.push("Bets watched from this room:");
       for (const b of r.bets) {
         parts.push(`- ${line(b.assumption.claim)} (${b.assumption.status}; via ${b.via.map((s) => s.name).join(", ")})`);
+      }
+    }
+    if (!bundle.documents.length) {
+      // Said once, above the rooms; not repeated ten times here.
+    } else if (!r.read) {
+      parts.push("From the document: not read into the rooms yet.");
+    } else if (!r.read.terms_matched) {
+      parts.push("From the document: too few of this room's words appear in the stored text for the search to mean anything, so the search failed rather than the document being silent.");
+    } else if (!r.passages.length) {
+      parts.push(
+        "From the document: nothing scored high enough to quote for this room. The strategy may be silent here, or may say it in other words.",
+      );
+    } else {
+      parts.push("From the document (verbatim, found by lexical search):");
+      const files = bundle.documents.length > 1 ? new Map(bundle.documents.map((d) => [d.id, d.filename] as const)) : null;
+      for (const p of r.passages) {
+        const where = files ? `${files.get(p.document_id) ?? "unknown file"} · ${p.locator}` : p.locator;
+        parts.push(`- ${where}: "${line(p.quote)}"`);
+      }
+    }
+    if (r.findings.length) {
+      parts.push("From the world (each cites a source the search returned):");
+      for (const f of r.findings) {
+        parts.push(`- [${f.status}] ${f.title}${f.published_date ? ` (${f.published_date})` : ""} — ${f.url}`);
+        if (f.quote) parts.push(`  "${line(f.quote)}"`);
+        if (f.quote_verified === false) parts.push("  Warning: this quotation was not found in the source the search returned.");
+        if (f.why) parts.push(`  ${line(f.why)}`);
+      }
+    }
+    if (r.dismissed.length) {
+      parts.push("Dismissed in this room, kept in the record:");
+      for (const f of r.dismissed) {
+        parts.push(
+          `- ${f.title} — dismissed ${day(f.decided_at)}${f.decided_author ? ` by ${f.decided_author}` : ""}${f.rationale ? `: ${line(f.rationale)}` : ""}`,
+        );
       }
     }
     parts.push("");

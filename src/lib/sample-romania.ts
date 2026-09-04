@@ -34,6 +34,7 @@ export const ROMANIA_SEED = {
   strategy: {
     title: "Romania National Disaster Risk Reduction Strategy 2024–2035",
     domain: "Disaster risk reduction",
+    jurisdiction: "Romania",
     language: "English",
     vision:
       "A living national DRR strategy that treats Sendai outcomes as the north star, while watching the conditions under which the strategy itself would need to be amended, refreshed, or reset.",

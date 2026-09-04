@@ -56,6 +56,7 @@ export const strategies = {
     domain: optText(120),
     vision: optText(2000),
     language: optText(60),
+    jurisdiction: optText(120),
     horizon_start: optDate,
     horizon_end: optDate,
   }),
@@ -65,6 +66,7 @@ export const strategies = {
     domain: optText(120),
     vision: optText(2000),
     language: optText(60),
+    jurisdiction: optText(120),
     horizon_start: nullableDate,
     horizon_end: nullableDate,
   }),
@@ -184,6 +186,22 @@ export const strategies = {
   removeMember: z.object({ strategy_id: id, user_id: text(200).min(1) }),
 };
 
+export const rooms = {
+  read: z.object({ strategy_id: id }),
+  search: z.object({
+    strategy_id: id,
+    category,
+    recency_years: z.number().int().min(1).max(10),
+    sessionKeys,
+  }),
+  decide: z.object({
+    strategy_id: id,
+    id,
+    status: z.enum(["kept", "dismissed"]),
+    rationale: optText(2000),
+  }),
+};
+
 export const keys = {
   savePersonal: z.object({
     provider: providerId,
@@ -237,6 +255,7 @@ export const ai = {
     domain: optText(120),
     vision: optText(2000),
     language: optText(60),
+    jurisdiction: optText(120),
     horizon_start: optDate,
     horizon_end: optDate,
     text: z.string().max(3_000_000),

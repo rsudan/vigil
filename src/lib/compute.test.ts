@@ -13,6 +13,7 @@ const strategy: Strategy = {
   domain: "",
   vision: "",
   language: "",
+  jurisdiction: "",
   extraction_note: "",
   horizon_start: null,
   horizon_end: null,

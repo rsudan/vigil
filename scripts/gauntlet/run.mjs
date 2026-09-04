@@ -289,17 +289,64 @@ async function main() {
     const resources = page.locator('article[data-room="5"]');
     await resources.getByText(/Funding window closes/).first().waitFor();
     await resources.getByText(/fiscal cliff/).first().waitFor();
-    const evidence = page.locator('article[data-room="9"]');
-    const verdict = ((await evidence.locator("[data-verdict]").textContent()) ?? "").trim();
-    assert(verdict === "no watchpoint", `room 9 should have no watchpoint in the mock, reads: ${verdict}`);
+    const unwatched = page.locator('article[data-room="8"]');
+    const verdict = ((await unwatched.locator("[data-verdict]").textContent()) ?? "").trim();
+    assert(verdict === "no watchpoint", `room 8 should have no watchpoint in the mock, reads: ${verdict}`);
     await page.getByText(/1 of 10 rooms has no watchpoint/).waitFor();
     await page.screenshot({ path: join(WORK, "categories.png"), fullPage: true });
-    await evidence.getByLabel(/Why room 9 has nothing to watch/).fill("Looked at the evidence chapter; nothing binding has changed.");
-    await evidence.getByRole("button", { name: /Reviewed — nothing to watch/ }).click();
-    await toast(page, /Room 9 recorded as reviewed/);
-    await page.locator('article[data-room="9"]').getByText(/Reviewed on \d{4}-\d{2}-\d{2} by Gauntlet Owner: nothing to watch/).waitFor();
+    await unwatched.getByLabel(/Why room 8 has nothing to watch/).fill("Looked at the risk chapter; no threshold is named that this strategy could cross.");
+    await unwatched.getByRole("button", { name: /Reviewed — nothing to watch/ }).click();
+    await toast(page, /Room 8 recorded as reviewed/);
+    await page.locator('article[data-room="8"]').getByText(/Reviewed on \d{4}-\d{2}-\d{2} by Gauntlet Owner: nothing to watch/).waitFor();
     await tab(page, "Log");
-    await page.getByText("Room 9 Evidence: reviewed, nothing to watch").waitFor();
+    await page.getByText("Room 8 Risks: reviewed, nothing to watch").waitFor();
+  });
+
+  await step("read the document into the rooms, with no key and no model", async () => {
+    await tab(page, "Categories");
+    await page.getByRole("button", { name: "Read the document into the rooms" }).click();
+    const t = await toast(page, /Read the document into 10 rooms/, 60_000);
+    log(`    ${t}`);
+
+    // A room the document speaks to quotes it verbatim, with the page.
+    const resources = page.locator('article[data-room="5"]');
+    await resources.getByText(/What the document says \(\d\)/).click();
+    await resources.getByText(/Digital Fund/).first().waitFor();
+    const locator = await resources.getByText(/found by lexical search, not interpreted/).first().textContent();
+    assert(/p\. \d/.test(locator ?? ""), `resources passage carries no page locator: ${locator}`);
+
+    // A room the document never addresses says so, rather than reaching.
+    const external = page.locator('article[data-room="1"]');
+    await external.getByText(/What the document says . nothing quotable here/).waitFor();
+
+    // The crux: room 8 has no watchpoint in the mock, the document speaks there,
+    // and the room still reads "no watchpoint".
+    const risks = page.locator('article[data-room="8"]');
+    await risks.getByText(/The document speaks here on p\. .*, and nothing watches it\./).waitFor();
+    const verdict = ((await risks.locator("[data-verdict]").textContent()) ?? "").trim();
+    assert(verdict === "no watchpoint", `material must not colour a room; room 8 reads ${verdict}`);
+    await page.getByText(/1 of 10 rooms has no watchpoint/).waitFor();
+    await page.screenshot({ path: join(WORK, "categories-read.png"), fullPage: true });
+  });
+
+  await step("search the world about one room, and keep a candidate without colouring the room", async () => {
+    const risks = page.locator('article[data-room="8"]');
+    await risks.getByRole("button", { name: /Search the world about Risks/ }).click();
+    const t = await toast(page, /candidate/, REAL ? 600_000 : 60_000);
+    log(`    ${t}`);
+    if (!REAL) {
+      assert(/1 candidate from \d+ sources, 1 dropped for citing no source/.test(t), `unexpected room search toast: ${t}`);
+      // The query was built for this room, not a single query for all ten.
+      await risks.getByText(/Risks: national update/).first().waitFor();
+      // The quotation is checked against the source the search returned.
+      await risks.getByText("quote verified").first().waitFor();
+    }
+    const before = ((await risks.locator("[data-verdict]").textContent()) ?? "").trim();
+    assert(before === "no watchpoint", `room 8 changed colour on a search: ${before}`);
+    await risks.getByRole("button", { name: "Keep", exact: true }).first().click();
+    await page.locator('article[data-room="8"]').getByText(/It is not a watchpoint until you add one/).waitFor();
+    const after = ((await page.locator('article[data-room="8"] [data-verdict]').textContent()) ?? "").trim();
+    assert(after === "no watchpoint", `keeping a candidate coloured room 8: ${after}`);
   });
 
   const strategyUrl = page.url();
@@ -471,6 +518,15 @@ async function main() {
     assert(!/Romania|DesInventar|Vrancea/.test(analysis), "analysis leaks Romania copy");
     assert(analysis.includes("Red lines:"), "analysis lacks red lines per room");
     assert(analysis.includes("Bets watched from this room:"), "analysis lacks bets per room");
+    assert(/From the document \(verbatim, found by lexical search\):/.test(analysis), "analysis lacks the document passages");
+    assert(/- .*p\. \d+[^:]*: "/.test(analysis), "analysis passages carry no page locator");
+    assert(/- \S+\.(?:pdf|md) · p\. \d/.test(analysis), "analysis does not name which document a passage came from");
+    assert(
+      analysis.includes("From the document: nothing scored high enough to quote for this room."),
+      "analysis never reports a room the search found nothing for",
+    );
+    assert(analysis.includes("From the world (each cites a source the search returned):"), "analysis lacks the room search results");
+    assert(/^Jurisdiction: /m.test(analysis), "analysis lacks the jurisdiction");
     assert(brief.includes("## Proposed changes to the original document"), "brief lacks amendments");
     if (!REAL) assert(brief.includes("not found in the stored text"), "brief does not flag the unverified quote");
     writeFileSync(join(WORK, "analysis.md"), analysis);

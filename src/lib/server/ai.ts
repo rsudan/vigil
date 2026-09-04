@@ -200,6 +200,7 @@ export const extractStrategy = createServerFn({ method: "POST" })
 
       const title = clip(data.title || parsed.title || documents[0]?.name || "Untitled strategy", 240);
       const language = clip(data.language || parsed.language, 60);
+      const jurisdiction = clip(data.jurisdiction || parsed.jurisdiction, 120);
       const horizonStart = asDate(data.horizon_start ?? parsed.horizon_start, "01");
       const horizonEnd = asDate(data.horizon_end ?? parsed.horizon_end, "12-31");
 
@@ -207,10 +208,10 @@ export const extractStrategy = createServerFn({ method: "POST" })
         let id = data.strategy_id;
         if (!id) {
           const created = await tx<{ id: number }>`
-            insert into strategies (user_id, title, domain, vision, language, horizon_start, horizon_end, extraction_note)
+            insert into strategies (user_id, title, domain, vision, language, jurisdiction, horizon_start, horizon_end, extraction_note)
             values (
               ${context.userId}, ${title}, ${clip(data.domain || parsed.domain, 120)},
-              ${clip(data.vision || parsed.vision, 2000)}, ${language},
+              ${clip(data.vision || parsed.vision, 2000)}, ${language}, ${jurisdiction},
               ${horizonStart}, ${horizonEnd}, ${note}
             ) returning id
           `;
@@ -219,6 +220,7 @@ export const extractStrategy = createServerFn({ method: "POST" })
           await tx`
             update strategies set
               language = case when language = '' then ${language} else language end,
+              jurisdiction = case when jurisdiction = '' then ${jurisdiction} else jurisdiction end,
               extraction_note = ${note}
             where id = ${id}
           `;

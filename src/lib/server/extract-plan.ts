@@ -56,6 +56,7 @@ export function windowsOf(chunks: ParsedChunk[], budget: number): Window[] {
 export const EXTRACTION_SHAPE = `{
   "title": string,
   "domain": string,
+  "jurisdiction": "the country, or the organisation, that adopted this strategy, e.g. Romania",
   "vision": string,
   "language": "the language the document is written in, e.g. Romanian",
   "horizon_start": "YYYY-MM-DD" or null,
@@ -85,6 +86,7 @@ Rules:
 - Write "NO BASELINE" as current_value when the document names a system or indicator but never measures it.
 - assumption_indexes are 0-based indexes into assumptions.
 - Ground every claim in the text. Where you can, name the chapter, annex, or page in baseline.
+- jurisdiction is whose strategy this is: the country or the organisation that adopted it. Read it off the title, the adopting instrument or the gazette line. Leave it empty only if the document truly never says.
 - Write in English; keep institution names and proper nouns as they appear in the document.
 
 STRATEGY TEXT:
@@ -135,7 +137,7 @@ const LIST_KEYS = ["assumptions", "signals", "interrupts", "cliffs"] as const;
 /** Merge partial extractions without a model: first non-empty scalar wins, lists are deduplicated by name or claim. */
 export function mergePartials(parts: Record<string, unknown>[]): Record<string, unknown> {
   const merged: Record<string, unknown> = {};
-  for (const key of ["title", "domain", "vision", "language", "horizon_start", "horizon_end"]) {
+  for (const key of ["title", "domain", "jurisdiction", "vision", "language", "horizon_start", "horizon_end"]) {
     merged[key] = parts.map((p) => p[key]).find((v) => typeof v === "string" && v.trim()) ?? null;
   }
   const caps = { assumptions: 12, signals: 16, interrupts: 8, cliffs: 8 } as const;
