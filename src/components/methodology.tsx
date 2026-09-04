@@ -80,7 +80,7 @@ export function MethodologySection({ compact = false }: { compact?: boolean }) {
                 {c.looksFor}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Example: </span>
+                <span className="font-medium text-foreground">Example (Romania sample): </span>
                 {c.example}
               </p>
             </li>

@@ -25,7 +25,7 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      // The platform injects its own apple-touch-icon on deploy; locally the asset does not exist.
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Serif:wght@500;600&display=swap",
@@ -33,7 +33,21 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootDocument,
+  notFoundComponent: NotFound,
 });
+
+function NotFound() {
+  return (
+    <main className="grid min-h-svh place-items-center bg-background px-6 text-center">
+      <div>
+        <p className="font-serif text-2xl">Nothing here</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          That address does not match a page. <a href="/app" className="underline">Back to strategies</a>.
+        </p>
+      </div>
+    </main>
+  );
+}
 
 function RootDocument() {
   const [queryClient] = useState(() => new QueryClient());

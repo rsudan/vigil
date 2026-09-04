@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
+import { GROK_PROVIDERS, authClient, authEnabled, brokerSignInAvailable, signIn, signUpEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ function Login() {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const broker = brokerSignInAvailable();
 
   if (!isPending && user) return <Navigate to="/app" />;
 
@@ -50,20 +51,26 @@ function Login() {
         </div>
         {authEnabled ? (
           <>
-            <div className="space-y-2">
-              {GROK_PROVIDERS.map((p) => (
-                <Button
-                  key={p.providerId}
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => signIn(p.providerId, { callbackURL: "/app" })}
-                >
-                  Continue with {p.label}
-                </Button>
-              ))}
-            </div>
-            <p className="text-center text-xs uppercase tracking-wider text-muted-foreground">or email</p>
+            {broker ? (
+              <>
+                <div className="space-y-2">
+                  {GROK_PROVIDERS.map((p) => (
+                    <Button
+                      key={p.providerId}
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() =>
+                        signIn(p.providerId, { callbackURL: "/app" }).catch((err: Error) => setError(err.message))
+                      }
+                    >
+                      Continue with {p.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-center text-xs uppercase tracking-wider text-muted-foreground">or email</p>
+              </>
+            ) : null}
             <form onSubmit={(e) => void onEmail(e)} className="space-y-3">
               {mode === "up" ? (
                 <div className="grid gap-1">
@@ -91,13 +98,17 @@ function Login() {
                 {mode === "up" ? "Create account" : "Sign in"}
               </Button>
             </form>
-            <button
-              type="button"
-              className="text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => setMode(mode === "up" ? "in" : "up")}
-            >
-              {mode === "up" ? "Have an account? Sign in" : "Need an account? Create one"}
-            </button>
+            {signUpEnabled ? (
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => setMode(mode === "up" ? "in" : "up")}
+              >
+                {mode === "up" ? "Have an account? Sign in" : "Need an account? Create one"}
+              </button>
+            ) : (
+              <p className="text-xs text-muted-foreground">New accounts are created by the administrator.</p>
+            )}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">Sign-in is disabled.</p>

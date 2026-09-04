@@ -85,10 +85,19 @@ export function isLlmProvider(id: string): id is LlmProviderId {
   return LLM_PROVIDERS.some((p) => p.id === id);
 }
 
+export function isProviderId(id: string): id is ProviderId {
+  return PROVIDERS.some((p) => p.id === id);
+}
+
 export function providerById(id: string) {
   return PROVIDERS.find((p) => p.id === id);
 }
 
+/**
+ * Used only when a provider's live model listing is unavailable. The Keys page
+ * refreshes the real list from each provider, so treat these as a last resort,
+ * not a catalogue.
+ */
 export const FALLBACK_MODELS: Record<LlmProviderId, string[]> = {
   xai: ["grok-4-fast", "grok-4-fast-non-reasoning", "grok-4.5", "grok-3"],
   openai: ["gpt-4.1", "gpt-4o", "gpt-4o-mini", "o4-mini"],
@@ -127,13 +136,47 @@ export type CategoryId = (typeof CATEGORIES)[number]["id"];
 export const INTENSITIES = ["watch", "amend", "refresh", "reset", "no-change"] as const;
 export type Intensity = (typeof INTENSITIES)[number];
 
+/** Revision intensities a threshold or a pre-commitment can name (no "no-change"). */
+export const REVISION_INTENSITIES = ["watch", "amend", "refresh", "reset"] as const;
+export type RevisionIntensity = (typeof REVISION_INTENSITIES)[number];
+
+/** Which threshold a signal's latest reading has crossed. */
+export const CROSSED_LEVELS = ["none", "watch", "amend", "refresh", "reset"] as const;
+export type CrossedLevel = (typeof CROSSED_LEVELS)[number];
+
+/** Ordering for intensities and crossed levels — bigger reopens more of the document. */
+export const INTENSITY_ORDER: Record<Intensity | CrossedLevel, number> = {
+  "no-change": 0,
+  none: 0,
+  watch: 1,
+  amend: 2,
+  refresh: 3,
+  reset: 4,
+};
+
 export const ASSUMPTION_STATUSES = ["holding", "weakening", "broken", "untested"] as const;
 export type AssumptionStatus = (typeof ASSUMPTION_STATUSES)[number];
+
+export const ASSUMPTION_ORIGINS = ["stated", "implicit"] as const;
 
 export const SIGNAL_LAYERS = ["sentinel", "rotating", "interrupt"] as const;
 export type SignalLayer = (typeof SIGNAL_LAYERS)[number];
 
 export const SIGNAL_STATUSES = ["active", "parked", "retired"] as const;
+export type SignalStatus = (typeof SIGNAL_STATUSES)[number];
+
+export const CADENCES = ["continuous", "monthly", "quarterly", "annual", "event-driven"] as const;
+export type Cadence = (typeof CADENCES)[number];
+
+export const CLIFF_KINDS = ["fiscal", "legal", "scenario", "review"] as const;
+
+export const EVIDENCE_DIRECTIONS = ["supporting", "weakening"] as const;
+
+export const DELIVERY_RAGS = ["green", "amber", "red", "unrated"] as const;
+
+/** Roles on a shared strategy. The creator is the owner; members are added by email. */
+export const MEMBER_ROLES = ["owner", "editor", "viewer"] as const;
+export type MemberRole = (typeof MEMBER_ROLES)[number];
 
 export const BUDGET = {
   maxActiveSignals: 30,

@@ -40,6 +40,20 @@ export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 /** The upstream providers to render sign-in buttons for. */
 export { GROK_PROVIDERS };
 
+/**
+ * Federated sign-in goes through the Grok auth broker, which only knows this
+ * app inside the sandbox live preview or when a deployer registered a client
+ * (`GROK_AUTH_CLIENT_ID`). Elsewhere the buttons would fail, so they are shown
+ * only in the sandbox or when `VITE_GROK_OAUTH=true` says the broker is wired.
+ */
+export function brokerSignInAvailable(): boolean {
+  if (import.meta.env.VITE_GROK_OAUTH === "true") return true;
+  return typeof window !== "undefined" && window.location.hostname.endsWith(".grok-sandbox.com");
+}
+
+/** Email sign-up is open unless the deployer set `VITE_DISABLE_SIGNUP=true`. */
+export const signUpEnabled = import.meta.env.VITE_DISABLE_SIGNUP !== "true";
+
 // ── Live-preview bearer token ────────────────────────────────────────────────
 // The embedded preview iframe has partitioned cookies, so we keep the session's
 // bearer token in sessionStorage and attach it to every Better Auth request (and

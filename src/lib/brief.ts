@@ -1,68 +1,93 @@
-import { analyzeAllCategories } from "./category-analysis";
-import { PRESSURE_RANGE, categoryById, INTENSITIES } from "./taxonomy";
-import { TERMS } from "./glossary";
-import { methodologyMarkdown } from "./methodology";
-import type { Amendment, PeerResearch, StrategyBundle } from "./types";
-import { categoryGuide } from "./category-guide";
+import { analyzeAllCategories } from "./category-analysis.ts";
+import { thresholdText } from "./compute.ts";
+import { PRESSURE_RANGE, categoryById, INTENSITIES } from "./taxonomy.ts";
+import { TERMS } from "./glossary.ts";
+import { methodSummaryMarkdown } from "./methodology.ts";
+import type { Amendment, PeerResearch, StrategyBundle } from "./types.ts";
+import { categoryGuide } from "./category-guide.ts";
 
 function line(s: string) {
   return s.replace(/\s+/g, " ").trim();
 }
 
+function day(value: string | null | undefined) {
+  if (!value) return "—";
+  const t = new Date(value);
+  if (Number.isNaN(t.getTime())) return value;
+  // Date-only values (cliffs, horizons) are already a calendar day; timestamps show the local day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return t.toLocaleDateString("en-CA");
+}
+
+function snapshot(bundle: StrategyBundle) {
+  const m = bundle.metrics;
+  const parts = ["## Snapshot"];
+  parts.push(
+    `- Assumption integrity: ${m.holding} holding, ${m.weakening} weakening, ${m.broken} broken, ${m.untested} untested`,
+  );
+  parts.push(`- Coverage (assumptions with a live sentinel): ${Math.round(m.coverage_ratio * 100)}%`);
+  parts.push(
+    `- Signal budget: ${m.active_signals}/30 active, ${m.sentinel_count}/8 sentinels, ${m.stale_count} stale, ${m.crossed_count} past a threshold`,
+  );
+  parts.push(
+    `- Interrupts: ${m.open_interrupts} open${m.overdue_interrupts ? `, ${m.overdue_interrupts} past the review deadline` : ""}`,
+  );
+  parts.push(`- Next cliff: ${m.next_cliff_name ?? "none"} (${m.days_to_cliff ?? "—"} days)`);
+  parts.push(
+    `- Decision queue: ${bundle.queue.length}/12${m.queue_overflow ? `, ${m.queue_overflow} more ranked below the cut` : ""}${
+      m.queue_suppressed ? `, ${m.queue_suppressed} cleared by logged decisions` : ""
+    }`,
+  );
+  parts.push("");
+  return parts.join("\n");
+}
+
 export function analysisMarkdown(bundle: StrategyBundle) {
   const s = bundle.strategy;
-  const m = bundle.metrics;
   const parts: string[] = [];
   parts.push(`# ${s.title}`);
   parts.push("");
   parts.push(`Domain: ${s.domain || "—"}`);
-  parts.push(`Horizon: ${s.horizon_start ?? "—"} → ${s.horizon_end ?? "—"}`);
+  if (s.language) parts.push(`Document language: ${s.language}`);
+  parts.push(`Horizon: ${s.horizon_start ?? "—"} to ${s.horizon_end ?? "—"}`);
   parts.push(`Delivery (existing M&E): ${s.delivery_rag}`);
+  parts.push(`Generated: ${new Date().toISOString().slice(0, 10)}`);
   parts.push("");
   if (s.vision) {
     parts.push("## Vision");
     parts.push(s.vision);
     parts.push("");
   }
-  parts.push(methodologyMarkdown());
-  parts.push("## How to read this");
-  parts.push(TERMS.assumption.body);
-  parts.push("");
-  parts.push(TERMS.sentinel.body);
-  parts.push("");
-  parts.push("## Snapshot");
-  parts.push(
-    `- Assumption integrity: ${m.holding} holding, ${m.weakening} weakening, ${m.broken} broken, ${m.untested} untested`,
-  );
-  parts.push(`- Coverage (assumptions with a live sentinel): ${Math.round(m.coverage_ratio * 100)}%`);
-  parts.push(`- Signal budget: ${m.active_signals}/30 active, ${m.sentinel_count}/8 sentinels, ${m.stale_count} stale`);
-  parts.push(`- Next cliff: ${m.next_cliff_name ?? "none"} (${m.days_to_cliff ?? "—"} days)`);
-  parts.push(`- Decision queue: ${bundle.queue.length}/12`);
-  parts.push("");
+  parts.push(methodSummaryMarkdown());
+  parts.push(snapshot(bundle));
   parts.push("## Load-bearing assumptions");
-  parts.push("A load-bearing assumption is a bet that, if false, would change the document.");
+  parts.push(TERMS.assumption.body);
   parts.push("");
   for (const a of bundle.assumptions) {
     parts.push(`### ${a.sort_order}. ${line(a.claim)}`);
     parts.push(`- Origin: ${a.origin}`);
-    parts.push(`- Status: ${a.status}`);
+    parts.push(`- Status: ${a.status} (since ${day(a.status_changed_at)})`);
     parts.push(`- If broken: ${a.implied_intensity}`);
     parts.push(`- Owner: ${a.owner_label || "unassigned"}`);
+    parts.push(`- Last evidence: ${day(a.last_evidence_at)}`);
     parts.push("");
   }
   parts.push("## Signals");
   parts.push(
-    "Sentinels are always on (max 8). Rotating signals are this quarter only. Pressure = materiality × velocity × (6 − confidence), from 1 to 125 (quiet 1–15, moderate 16–39, high 40–79, severe 80–125).",
+    `${TERMS.sentinel.body} Pressure = materiality × velocity × (6 − confidence), from 1 to 125 (quiet 1–15, moderate 16–39, high 40–79, severe 80–125).`,
   );
   parts.push("");
   for (const sig of bundle.signals) {
     parts.push(`### ${sig.name}`);
     parts.push(`- Category: ${categoryById(sig.category).name}`);
-    parts.push(`- Layer: ${sig.layer}`);
-    parts.push(`- M·V·C: ${sig.materiality}·${sig.velocity}·${sig.confidence} → pressure ${sig.pressure}/${PRESSURE_RANGE.max}`);
-    parts.push(`- Cadence: ${sig.cadence}`);
+    parts.push(`- Layer: ${sig.layer} · status: ${sig.status}`);
+    parts.push(
+      `- M·V·C: ${sig.materiality}·${sig.velocity}·${sig.confidence} → pressure ${sig.pressure}/${PRESSURE_RANGE.max}`,
+    );
+    parts.push(`- Cadence: ${sig.cadence}${sig.stale ? " (evidence stale)" : ""}`);
     parts.push(`- Baseline: ${sig.baseline || "NO BASELINE"}`);
-    parts.push(`- Current: ${sig.current_value || "—"}`);
+    parts.push(`- Current: ${sig.current_value || "—"} (as of ${day(sig.last_evidence_at ?? sig.created_at)})`);
+    if (sig.crossed_level !== "none") parts.push(`- Crossed threshold: ${sig.crossed_level}`);
     parts.push(`- Watch: ${sig.threshold_watch || "—"}`);
     parts.push(`- Amend: ${sig.threshold_amend || "—"}`);
     parts.push(`- Refresh: ${sig.threshold_refresh || "—"}`);
@@ -73,7 +98,9 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   }
   parts.push("## Interrupts (red lines)");
   for (const i of bundle.interrupts) {
-    parts.push(`- **${i.name}** (${i.status}): ${i.red_line}`);
+    parts.push(
+      `- **${i.name}** (${i.status}${i.status === "open" ? `, review by ${day(i.review_by)}` : ""}): ${i.red_line}`,
+    );
   }
   parts.push("");
   parts.push("## Cliffs");
@@ -84,8 +111,11 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   if (bundle.documents.length) {
     parts.push("## Source documents on file");
     for (const d of bundle.documents) {
-      parts.push(`- ${d.filename} · ${d.char_count.toLocaleString()} characters · ${d.chunk_count} chunks`);
+      parts.push(
+        `- ${d.filename} · ${d.char_count.toLocaleString()} characters · ${d.chunk_count} chunks${d.page_count ? ` · ${d.page_count} pages` : ""}`,
+      );
     }
+    if (s.extraction_note) parts.push(s.extraction_note);
     parts.push("");
   }
   parts.push("## Analysis by category");
@@ -95,12 +125,16 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     parts.push(`### ${r.id}. ${r.short} — ${r.name}`);
     parts.push(r.question);
     parts.push("");
-    parts.push(`Pressure: ${r.pressure == null ? "none (gap)" : `${r.pressure}/${PRESSURE_RANGE.max} (${r.verdict})`}`);
+    parts.push(
+      `Pressure: ${r.pressure == null ? "none (gap)" : `${r.pressure}/${PRESSURE_RANGE.max} (${r.verdict})`}`,
+    );
     parts.push(`Reading: ${r.reading}`);
     if (r.signals.length) {
       parts.push("Watchpoints:");
       for (const sig of r.signals) {
-        parts.push(`- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer})`);
+        parts.push(
+          `- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer}${sig.crossed_level !== "none" ? `, crossed ${sig.crossed_level}` : ""})`,
+        );
       }
     }
     if (r.assumptions.length) {
@@ -111,12 +145,21 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     }
     parts.push("");
   }
+  parts.push("## Decision queue");
+  if (!bundle.queue.length) parts.push("_Empty._");
+  for (const q of bundle.queue) {
+    parts.push(`- **${q.intensity_hint}** — ${q.title}${q.overdue ? " (overdue)" : ""}`);
+    parts.push(`  ${q.reason}`);
+  }
+  parts.push("");
   parts.push(amendmentsMarkdown(bundle.amendments ?? []));
   parts.push(peerMarkdown(bundle.peer_research));
   parts.push("## Decision log");
   if (!bundle.decisions.length) parts.push("_None yet._");
   for (const d of bundle.decisions) {
-    parts.push(`- ${d.decided_at} · **${d.intensity}** · ${d.summary} — ${d.rationale}`);
+    parts.push(
+      `- ${day(d.decided_at)} · **${d.intensity}** · ${d.summary} — ${d.rationale}${d.author ? ` (${d.author})` : ""}`,
+    );
   }
   return parts.join("\n");
 }
@@ -132,35 +175,58 @@ export function revisionBriefMarkdown(bundle: StrategyBundle) {
   parts.push("");
   parts.push(`Document: **${s.title}**`);
   parts.push(`Domain: ${s.domain || "—"}`);
+  if (s.language) parts.push(`Language of the official text: ${s.language}`);
   if (s.vision) parts.push(`Vision: ${s.vision}`);
+  parts.push(`Prepared: ${new Date().toISOString().slice(0, 10)}`);
   parts.push("");
 
   const broken = bundle.assumptions.filter((a) => a.status === "broken");
   const weakening = bundle.assumptions.filter((a) => a.status === "weakening");
   const untested = bundle.assumptions.filter((a) => a.status === "untested");
   const interrupts = bundle.interrupts.filter((i) => i.status === "open");
-  const high = [...bundle.signals].filter((x) => x.status === "active").sort((a, b) => b.pressure - a.pressure).slice(0, 5);
+  const crossed = bundle.signals.filter((x) => x.status === "active" && x.crossed_level !== "none");
+  const high = [...bundle.signals]
+    .filter((x) => x.status === "active")
+    .sort((a, b) => b.pressure - a.pressure)
+    .slice(0, 5);
 
   parts.push("## Immediate decisions");
   if (!bundle.queue.length) {
     parts.push("The queue is empty. Log **no change** if a review sitting happened and the text still holds.");
   } else {
     for (const q of bundle.queue) {
-      parts.push(`- **${q.intensity_hint}** — ${q.title}`);
+      parts.push(`- **${q.intensity_hint}** — ${q.title}${q.overdue ? " (overdue)" : ""}`);
       parts.push(`  ${q.reason}`);
+    }
+    if (bundle.metrics.queue_overflow) {
+      parts.push(
+        `- _${bundle.metrics.queue_overflow} further item${bundle.metrics.queue_overflow > 1 ? "s" : ""} ranked below the cut of twelve. Clear these first._`,
+      );
     }
   }
   parts.push("");
+
+  if (crossed.length) {
+    parts.push("## Thresholds crossed");
+    for (const sig of crossed) {
+      parts.push(
+        `- **${sig.name}** — reading “${sig.current_value || "—"}” has crossed the ${sig.crossed_level} threshold (${thresholdText(sig, sig.crossed_level) || "not written"}). Guard: ${sig.false_positive_guard || "—"}.`,
+      );
+    }
+    parts.push("");
+  }
 
   parts.push("## Proposed changes to the original document");
   const amendments = bundle.amendments ?? [];
   if (!amendments.length) {
     parts.push(
-      "No drafted amendments yet. Open Review and choose “Draft changes from the original”, or run peer research.",
+      "No drafted amendments yet. Open Review and choose “Draft changes from the original”, or run peer research first so the drafter can use it.",
     );
     parts.push("");
-    if (!broken.length && !weakening.length && !interrupts.length) {
-      parts.push("No weakening or broken assumptions. No fired interrupts. Do not reopen the document on the basis of this sitting unless peer research argues otherwise.");
+    if (!broken.length && !weakening.length && !interrupts.length && !crossed.length) {
+      parts.push(
+        "No weakening or broken assumptions, no crossed thresholds, no fired interrupts. Do not reopen the document on the basis of this sitting unless peer research argues otherwise.",
+      );
       parts.push("");
     }
   } else {
@@ -170,7 +236,7 @@ export function revisionBriefMarkdown(bundle: StrategyBundle) {
   for (const i of interrupts) {
     parts.push(`### Interrupt fired — ${i.name}`);
     parts.push(i.red_line);
-    parts.push("Review within 30 days. Do not wait for the annual cycle.");
+    parts.push(`Review by ${day(i.review_by)}. Do not wait for the annual cycle.`);
     parts.push("");
   }
 
@@ -190,13 +256,14 @@ export function revisionBriefMarkdown(bundle: StrategyBundle) {
   parts.push("");
 
   parts.push("## Cliffs on the horizon");
+  if (!bundle.cliffs.length) parts.push("None named.");
   for (const c of bundle.cliffs) {
     parts.push(`- ${c.name} — ${c.cliff_date} (${c.kind})`);
   }
   parts.push("");
   parts.push("## Intensity key");
   for (const i of INTENSITIES) {
-    parts.push(`- **${i}**`);
+    parts.push(`- **${i}** — ${TERMS[i === "no-change" ? "watch" : i].body}`);
   }
   parts.push("");
   parts.push(peerMarkdown(bundle.peer_research));
@@ -211,6 +278,10 @@ function formatAmendments(amendments: Amendment[]) {
     parts.push("");
     parts.push("**Original (quote or silence)**");
     parts.push(a.original_excerpt || "_Not in the original text._");
+    if (a.excerpt_verified === false) {
+      parts.push("");
+      parts.push("_Warning: this quotation was not found in the stored text. Check it against the document before use._");
+    }
     parts.push("");
     parts.push("**Proposed text for the document**");
     parts.push(a.proposed_text);
@@ -233,24 +304,27 @@ function amendmentsMarkdown(amendments: Amendment[]) {
 }
 
 function peerMarkdown(research: PeerResearch | null) {
-  const parts = ["## Peer strategy research", ""];
+  const parts = ["## Ideas from peer strategies", ""];
   if (!research) {
     parts.push("No peer research has been run. Open the Peers tab, set how recent the comparison should be, and search.");
     parts.push("");
     return parts.join("\n");
   }
-  parts.push(`Window: last ${research.recency_years} years · ${research.created_at}`);
+  parts.push(
+    "These are ideas taken from other countries’ documents, not drafted text. Run “Draft changes from the original” after research to turn any of them into a proposed amendment.",
+  );
+  parts.push("");
+  parts.push(`Window: last ${research.recency_years} years · run ${day(research.created_at)}`);
   parts.push(`Query: ${research.query}`);
   parts.push("");
   parts.push(research.summary);
   parts.push("");
-  parts.push("### Recommendations from peers");
   for (const f of research.findings) {
     const room = f.category ? categoryGuide(f.category) : null;
     parts.push(`#### ${f.country || "Peer"} — ${f.title}`);
     if (f.year) parts.push(`Year: ${f.year}`);
     if (f.url) parts.push(`Source: ${f.url}`);
-    if (room) parts.push(`Room: ${room.short} · intensity: ${f.intensity}`);
+    if (room) parts.push(`Room: ${room.short} · suggested intensity: ${f.intensity}`);
     parts.push(f.idea);
     parts.push("");
     parts.push(f.relevance);

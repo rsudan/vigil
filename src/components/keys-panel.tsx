@@ -5,6 +5,7 @@ import {
   deletePersonalKey,
   getExtractPreference,
   listKeyStatus,
+  platformKeyPolicy,
   refreshModels,
   savePersonalKey,
   setExtractPreference,
@@ -33,6 +34,7 @@ export function KeysPanel() {
   const qc = useQueryClient();
   const status = useQuery({ queryKey: ["keys"], queryFn: () => listKeyStatus() });
   const pref = useQuery({ queryKey: ["extract-pref"], queryFn: () => getExtractPreference() });
+  const policy = useQuery({ queryKey: ["platform-policy"], queryFn: () => platformKeyPolicy() });
   const [draft, setDraft] = useState(emptyDraft);
   const [session, setSession] = useState(readSessionKeys);
   const [sessionModels, setSessionModels] = useState(readSessionModels);
@@ -129,9 +131,26 @@ export function KeysPanel() {
         <h1 className="font-serif text-3xl">Bring your own keys</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Save a key to your account (Persist), keep it for this tab only, or inherit an organisation grant.
-          Test each key before you rely on it. For language-model providers, refresh the model list and pick
-          which model extracts the architecture. A platform xAI key is used only if you have not provided one.
+          Saved keys are encrypted at rest. Test each key before you rely on it. For language-model providers,
+          refresh the model list and pick which model extracts the architecture.
         </p>
+        {policy.data ? (
+          <p className="mt-2 max-w-2xl text-xs text-muted-foreground">
+            {policy.data.configured.length
+              ? `Keys set in the server environment: ${policy.data.configured.join(", ")}. `
+              : "No keys are set in the server environment. "}
+            {policy.data.policy === "all"
+              ? "Every signed-in user may spend them."
+              : policy.data.policy === "none"
+                ? "They are switched off."
+                : "Only administrators may spend them."}
+            {policy.data.configured.length
+              ? policy.data.allowed_for_me
+                ? " They are used when you have not provided your own."
+                : " They are not available to your account; bring your own."
+              : ""}
+          </p>
+        ) : null}
       </div>
 
       <Card>
