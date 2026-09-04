@@ -281,6 +281,27 @@ async function main() {
     await page.getByText(/implementation-note\.md/).waitFor();
   });
 
+  await step("rooms place red lines and cliffs; an unwatched room can be recorded as reviewed", async () => {
+    await tab(page, "Categories");
+    const mandate = page.locator('article[data-room="6"]');
+    await mandate.locator("li", { hasText: "Coordinating body stops sitting" }).waitFor();
+    await mandate.getByText(/red line · armed/).waitFor();
+    const resources = page.locator('article[data-room="5"]');
+    await resources.getByText(/Funding window closes/).first().waitFor();
+    await resources.getByText(/fiscal cliff/).first().waitFor();
+    const evidence = page.locator('article[data-room="9"]');
+    const verdict = ((await evidence.locator("[data-verdict]").textContent()) ?? "").trim();
+    assert(verdict === "no watchpoint", `room 9 should have no watchpoint in the mock, reads: ${verdict}`);
+    await page.getByText(/1 of 10 rooms has no watchpoint/).waitFor();
+    await page.screenshot({ path: join(WORK, "categories.png"), fullPage: true });
+    await evidence.getByLabel(/Why room 9 has nothing to watch/).fill("Looked at the evidence chapter; nothing binding has changed.");
+    await evidence.getByRole("button", { name: /Reviewed — nothing to watch/ }).click();
+    await toast(page, /Room 9 recorded as reviewed/);
+    await page.locator('article[data-room="9"]').getByText(/Reviewed on \d{4}-\d{2}-\d{2} by Gauntlet Owner: nothing to watch/).waitFor();
+    await tab(page, "Log");
+    await page.getByText("Room 9 Evidence: reviewed, nothing to watch").waitFor();
+  });
+
   const strategyUrl = page.url();
 
   await step("change an assumption status with evidence", async () => {
@@ -326,10 +347,18 @@ async function main() {
     await tab(page, "Queue");
     const first = page.locator("article, .rounded-xl").filter({ hasText: "#1" }).first();
     assert(/interrupt · suggested refresh/.test((await first.textContent()) ?? ""), "fired interrupt is not first in the queue");
+    await tab(page, "Categories");
+    const mandate = page.locator('article[data-room="6"]');
+    await mandate.getByText(/Red line “Coordinating body stops sitting” has fired/).waitFor();
+    const open = ((await mandate.locator("[data-verdict]").textContent()) ?? "").trim();
+    assert(open === "severe", `Mandate should read severe while its red line is open, reads: ${open}`);
     await tab(page, "Review");
     await page.getByRole("button", { name: "Close" }).first().click();
     await toast(page, /Interrupt closed/);
     await page.getByRole("button", { name: "Re-arm" }).first().waitFor();
+    await tab(page, "Categories");
+    const closed = ((await page.locator('article[data-room="6"] [data-verdict]').textContent()) ?? "").trim();
+    assert(closed !== "severe", "Mandate still reads severe after the red line was closed");
   });
 
   await step("assess the strategy: rate delivery with a basis, check a bet, then accept a model proposal", async () => {
@@ -440,6 +469,8 @@ async function main() {
     assert(analysis.includes("## Snapshot"), "analysis lacks the snapshot");
     assert(analysis.includes("## Ideas from peer strategies"), "analysis lacks the peer section");
     assert(!/Romania|DesInventar|Vrancea/.test(analysis), "analysis leaks Romania copy");
+    assert(analysis.includes("Red lines:"), "analysis lacks red lines per room");
+    assert(analysis.includes("Bets watched from this room:"), "analysis lacks bets per room");
     assert(brief.includes("## Proposed changes to the original document"), "brief lacks amendments");
     if (!REAL) assert(brief.includes("not found in the stored text"), "brief does not flag the unverified quote");
     writeFileSync(join(WORK, "analysis.md"), analysis);

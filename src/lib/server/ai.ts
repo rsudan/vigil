@@ -305,9 +305,13 @@ export const extractStrategy = createServerFn({ method: "POST" })
           const i = raw as Record<string, unknown>;
           const name = clip(i.name, 180).trim();
           if (!name) continue;
+          // The room the model named, or null: a value outside 1–10 is not a room, and
+          // reads as Risks with "room not set" rather than being clamped into a real one.
+          const named = Math.round(Number(i.category));
+          const room = Number.isInteger(named) && named >= 1 && named <= 10 ? named : null;
           await tx`
-            insert into interrupts (strategy_id, user_id, name, red_line, status)
-            values (${id}, ${context.userId}, ${name}, ${clip(i.red_line, 400)}, 'armed')
+            insert into interrupts (strategy_id, user_id, name, red_line, category, status)
+            values (${id}, ${context.userId}, ${name}, ${clip(i.red_line, 400)}, ${room}, 'armed')
           `;
         }
         const cliffs = Array.isArray(parsed.cliffs) ? parsed.cliffs.slice(0, 8) : [];

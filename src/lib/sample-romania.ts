@@ -411,14 +411,17 @@ export const ROMANIA_SEED = {
     {
       name: "Major loss event",
       red_line: "A disaster with direct damages ≥ 0.5% of GDP, or a Vrancea-class earthquake.",
+      category: 8,
     },
     {
       name: "Warning or risk-platform outage",
       red_line: "RO-RISK, DesInventar, or national warning unavailable for > 14 days, or a cyber incident that corrupts the loss record.",
+      category: 2,
     },
     {
       name: "Coordinating body failure",
       red_line: "PNRRD does not sit for 6 months, or the coordinating mandate is withdrawn.",
+      category: 6,
     },
   ],
   cliffs: [

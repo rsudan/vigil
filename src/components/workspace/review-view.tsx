@@ -10,9 +10,10 @@ import {
   deleteInterrupt,
   fireInterrupt,
   rearmInterrupt,
+  setInterruptRoom,
 } from "@/lib/server/strategies";
 import { readSessionKeys } from "@/lib/session-keys";
-import { CLIFF_KINDS } from "@/lib/taxonomy";
+import { CATEGORIES, CLIFF_KINDS, CLIFF_ROOM, INTERRUPT_DEFAULT_ROOM, categoryById, roomOfInterrupt } from "@/lib/taxonomy";
 import type { Amendment, Cliff, StrategyBundle } from "@/lib/types";
 import { GlossaryStrip, PageGuide } from "../explain";
 import { Badge } from "../ui/badge";
@@ -60,7 +61,16 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
   const strategyId = bundle.strategy.id;
   const [name, setName] = useState("");
   const [redLine, setRedLine] = useState("");
+  const [room, setRoom] = useState<number>(INTERRUPT_DEFAULT_ROOM);
   const onError = (e: Error) => toast.error(e.message);
+  const place = useMutation({
+    mutationFn: (v: { id: number; category: number | null }) => setInterruptRoom({ data: { strategy_id: strategyId, ...v } }),
+    onSuccess: () => {
+      toast.success("Room set");
+      onChanged();
+    },
+    onError,
+  });
   const fire = useMutation({
     mutationFn: (id: number) => fireInterrupt({ data: { id, strategy_id: strategyId } }),
     onSuccess: () => {
@@ -88,7 +98,7 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
     onError,
   });
   const add = useMutation({
-    mutationFn: () => addInterrupt({ data: { strategy_id: strategyId, name, red_line: redLine } }),
+    mutationFn: () => addInterrupt({ data: { strategy_id: strategyId, name, red_line: redLine, category: room } }),
     onSuccess: () => {
       toast.success("Red line armed");
       setName("");
@@ -102,7 +112,10 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
     <Card>
       <CardHeader>
         <CardTitle>1. Interrupts — red lines</CardTitle>
-        <CardDescription>Agreed in advance. Fire when the event happens; close when the decision is logged.</CardDescription>
+        <CardDescription>
+          Agreed in advance. Fire when the event happens; close when the decision is logged. Each red line sits in
+          one of the ten rooms; one with no room reads as Risks.
+        </CardDescription>
       </CardHeader>
       <CardBody className="space-y-3">
         {bundle.interrupts.length === 0 ? (
@@ -115,7 +128,7 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
               <div className="min-w-0">
                 <p className="text-sm font-medium">{i.name}</p>
                 <p className="text-xs text-muted-foreground">{i.red_line}</p>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider">
                   <span>{i.status}</span>
                   {i.status === "open" ? (
                     <span className={overdue ? "text-broken" : "text-weakening"}>
@@ -123,7 +136,31 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
                       {overdue ? " · overdue" : ""}
                     </span>
                   ) : null}
-                </p>
+                  {editable ? (
+                    <label className="flex items-center gap-1 normal-case tracking-normal">
+                      <span className="text-muted-foreground">Room</span>
+                      <NativeSelect
+                        aria-label={`Room for ${i.name}`}
+                        className="h-7 w-auto text-xs"
+                        value={i.category ?? ""}
+                        disabled={place.isPending}
+                        onChange={(e) => place.mutate({ id: i.id, category: e.target.value ? Number(e.target.value) : null })}
+                      >
+                        <option value="">not set · reads as Risks</option>
+                        {CATEGORIES.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.id}. {c.short}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      room · {categoryById(roomOfInterrupt(i)).short}
+                      {i.category == null ? " (not set)" : ""}
+                    </span>
+                  )}
+                </div>
               </div>
               {editable ? (
                 <div className="flex flex-wrap gap-2">
@@ -158,7 +195,7 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
           );
         })}
         {editable ? (
-          <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
+          <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[1fr_2fr_1fr_auto] sm:items-end">
             <Field label="New red line" htmlFor="int-name">
               <Input id="int-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Major loss event" />
             </Field>
@@ -169,6 +206,15 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
                 onChange={(e) => setRedLine(e.target.value)}
                 placeholder="Direct damages ≥ 0.5% of GDP, or the platform dark for 14 days"
               />
+            </Field>
+            <Field label="Room" htmlFor="int-room">
+              <NativeSelect id="int-room" value={room} onChange={(e) => setRoom(Number(e.target.value))}>
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.id}. {c.short}
+                  </option>
+                ))}
+              </NativeSelect>
             </Field>
             <Button size="sm" disabled={add.isPending || !name.trim() || !redLine.trim()} onClick={() => add.mutate()}>
               Arm
@@ -207,7 +253,10 @@ function CliffsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChanged: 
     <Card>
       <CardHeader>
         <CardTitle>2. Cliffs — dated events</CardTitle>
-        <CardDescription>A funding sunset, a legal deadline, a rewrite window. Remove a cliff once it has been dealt with.</CardDescription>
+        <CardDescription>
+          A funding sunset, a legal deadline, a rewrite window. A cliff sits in the room its kind names. Remove a
+          cliff once it has been dealt with.
+        </CardDescription>
       </CardHeader>
       <CardBody className="space-y-3">
         {bundle.cliffs.length === 0 ? (
@@ -248,7 +297,7 @@ function CliffsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChanged: 
               <NativeSelect id="cliff-kind" value={kind} onChange={(e) => setKind(e.target.value as Cliff["kind"])}>
                 {CLIFF_KINDS.map((k) => (
                   <option key={k} value={k}>
-                    {k}
+                    {k} · {categoryById(CLIFF_ROOM[k]).short}
                   </option>
                 ))}
               </NativeSelect>

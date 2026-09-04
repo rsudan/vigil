@@ -73,7 +73,7 @@ function signal(id: number, over: Partial<Omit<Signal, "pressure" | "stale">> = 
 }
 
 function interrupt(id: number, over: Partial<Interrupt> = {}): Interrupt {
-  return { id, strategy_id: 1, name: `Red line ${id}`, red_line: "x", fired_at: null, review_by: null, status: "armed", created_at: iso(-100), ...over };
+  return { id, strategy_id: 1, name: `Red line ${id}`, red_line: "x", category: null, fired_at: null, review_by: null, status: "armed", created_at: iso(-100), ...over };
 }
 
 function cliff(id: number, daysFromNow: number): Cliff {

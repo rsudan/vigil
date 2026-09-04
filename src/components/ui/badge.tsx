@@ -1,15 +1,16 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 export function Badge({
   className,
   tone = "neutral",
   children,
+  ...rest
 }: {
   className?: string;
   tone?: "neutral" | "holding" | "weakening" | "broken" | "untested" | "primary";
   children: ReactNode;
-}) {
+} & Omit<ComponentProps<"span">, "className" | "children">) {
   const tones: Record<string, string> = {
     neutral: "bg-muted text-muted-foreground",
     holding: "bg-holding/15 text-holding",
@@ -25,6 +26,7 @@ export function Badge({
         tones[tone],
         className,
       )}
+      {...rest}
     >
       {children}
     </span>

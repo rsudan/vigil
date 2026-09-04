@@ -1,22 +1,14 @@
-import { analyzeAllCategories } from "./category-analysis.ts";
+import { analyzeAllCategories, verdictWord } from "./category-analysis.ts";
 import { cellReading, thresholdText, validityOf } from "./compute.ts";
 import { PRESSURE_RANGE, categoryById, INTENSITIES } from "./taxonomy.ts";
 import { TERMS, deliveryWord } from "./glossary.ts";
 import { methodSummaryMarkdown } from "./methodology.ts";
 import type { Amendment, PeerResearch, StrategyBundle } from "./types.ts";
 import { categoryGuide } from "./category-guide.ts";
+import { day } from "./day.ts";
 
 function line(s: string) {
   return s.replace(/\s+/g, " ").trim();
-}
-
-function day(value: string | null | undefined) {
-  if (!value) return "—";
-  const t = new Date(value);
-  if (Number.isNaN(t.getTime())) return value;
-  // Date-only values (cliffs, horizons) are already a calendar day; timestamps show the local day.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return t.toLocaleDateString("en-CA");
 }
 
 function snapshot(bundle: StrategyBundle) {
@@ -137,22 +129,37 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     parts.push(`### ${r.id}. ${r.short} — ${r.name}`);
     parts.push(r.question);
     parts.push("");
-    parts.push(
-      `Pressure: ${r.pressure == null ? "none (gap)" : `${r.pressure}/${PRESSURE_RANGE.max} (${r.verdict})`}`,
-    );
+    parts.push(`Pressure: ${r.pressure == null ? "none" : `${r.pressure}/${PRESSURE_RANGE.max}`} · verdict: ${verdictWord(r.verdict)}`);
     parts.push(`Reading: ${r.reading}`);
+    if (r.also) parts.push(r.also);
     if (r.signals.length) {
       parts.push("Watchpoints:");
       for (const sig of r.signals) {
         parts.push(
-          `- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer}${sig.crossed_level !== "none" ? `, crossed ${sig.crossed_level}` : ""})`,
+          `- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer}${sig.crossed_level !== "none" ? `, crossed ${sig.crossed_level}` : ""}${
+            sig.category !== r.id ? ", also filed here" : ""
+          })`,
         );
       }
     }
-    if (r.assumptions.length) {
-      parts.push("Linked bets:");
-      for (const a of r.assumptions) {
-        parts.push(`- ${line(a.claim)} (${a.status})`);
+    if (r.interrupts.length) {
+      parts.push("Red lines:");
+      for (const i of r.interrupts) {
+        parts.push(`- ${i.interrupt.name} (${i.interrupt.status}${i.overdue ? ", review overdue" : ""}${i.room_set ? "" : ", room not set"})`);
+      }
+    }
+    if (r.cliffs.length) {
+      parts.push("Cliffs:");
+      for (const c of r.cliffs) {
+        parts.push(
+          `- ${c.cliff.name} — ${c.cliff.cliff_date} (${c.cliff.kind}, ${c.passed ? `passed ${-c.days} days ago` : `in ${c.days} days`}${c.decided_at ? `, decided ${day(c.decided_at)}` : ""})`,
+        );
+      }
+    }
+    if (r.bets.length) {
+      parts.push("Bets watched from this room:");
+      for (const b of r.bets) {
+        parts.push(`- ${line(b.assumption.claim)} (${b.assumption.status}; via ${b.via.map((s) => s.name).join(", ")})`);
       }
     }
     parts.push("");

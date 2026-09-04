@@ -188,6 +188,8 @@ export type Interrupt = {
   strategy_id: number;
   name: string;
   red_line: string;
+  /** The room this red line belongs to. Null reads as Risks (8) until someone sets it. */
+  category: number | null;
   fired_at: string | null;
   review_by: string | null;
   status: "armed" | "open" | "closed";

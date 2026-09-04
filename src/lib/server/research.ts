@@ -55,7 +55,7 @@ export const draftAmendments = createServerFn({ method: "POST" })
 
     const moving = bundle.assumptions.filter((a) => a.status === "weakening" || a.status === "broken");
     const rooms = analyzeAllCategories(bundle);
-    const gaps = rooms.filter((c) => c.verdict === "gap" || c.verdict === "high" || c.verdict === "severe");
+    const gaps = rooms.filter((c) => !c.signals.length || c.verdict === "high" || c.verdict === "severe");
     const crossed = bundle.signals.filter((s) => s.status === "active" && s.crossed_level !== "none");
     const peerIdeas = bundle.peer_research?.findings ?? [];
 
@@ -63,7 +63,9 @@ export const draftAmendments = createServerFn({ method: "POST" })
     const queries = [
       ...moving.map((a) => a.claim),
       ...bundle.queue.map((q) => `${q.title} ${q.reason}`),
-      ...gaps.map((g) => `${g.question} ${g.looksFor}`),
+      ...gaps.map((g) =>
+        [g.question, g.looksFor, ...g.interrupts.map((i) => i.interrupt.name), ...g.cliffs.map((c) => c.cliff.name)].join(" "),
+      ),
       ...crossed.map((s) => `${s.name} ${s.baseline} ${thresholdText(s, s.crossed_level)}`),
       ...peerIdeas.map((f) => f.idea),
       "monitoring evaluation review revision financing budget",
@@ -223,7 +225,7 @@ export const researchPeers = createServerFn({ method: "POST" })
         .map((a) => `- ${a.claim}`),
       `Rooms with no watchpoint:`,
       ...analyzeAllCategories(bundle)
-        .filter((c) => c.verdict === "gap")
+        .filter((c) => !c.signals.length)
         .map((c) => `- ${c.short}`),
     ].join("\n");
 

@@ -1,9 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Settings2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { getStrategyBundle } from "@/lib/server/strategies";
-import { analyzeAllCategories, type CategoryResult } from "@/lib/category-analysis";
+import { toast } from "sonner";
+import { getStrategyBundle, logDecision } from "@/lib/server/strategies";
+import {
+  ROOM_REVIEW_DAYS,
+  analyzeAllCategories,
+  roomsWithoutWatchpoint,
+  unwatchedBets,
+  verdictWord,
+  type CategoryResult,
+} from "@/lib/category-analysis";
 import { analysisMarkdown, revisionBriefMarkdown } from "@/lib/brief";
 import { validityOf } from "@/lib/compute";
 import { deliveryWord } from "@/lib/glossary";
@@ -15,6 +23,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
+import { Textarea } from "./ui/textarea";
 import { AssumptionDetail, NewAssumptionForm } from "./workspace/assumption-detail";
 import { PeersView } from "./workspace/peers-view";
 import { QueueView } from "./workspace/queue-view";
@@ -180,6 +189,7 @@ export function StrategyWorkspace({ id }: { id: number }) {
           focusId={focusCategory}
           onOpenAssumption={setSelectedAssumption}
           onOpenSignal={setSelectedSignal}
+          onChanged={refresh}
         />
       )}
       {view === "assumptions" && <AssumptionBoard bundle={bundle} onOpen={setSelectedAssumption} onChanged={refresh} />}
@@ -289,10 +299,11 @@ function Overview({
         <CardHeader>
           <CardTitle>Category pressure</CardTitle>
           <CardDescription>
-            Ten watch-areas. The number is the pressure of the hottest signal in that room, on a scale of{" "}
+            Ten rooms. The number is the pressure of the hottest watchpoint in that room, on a scale of{" "}
             {PRESSURE_RANGE.min} to {PRESSURE_RANGE.max}: how much it matters, how fast it can move, and how little
-            you trust the current figure. A dash means nothing is being watched there — a gap, not calm. Click a
-            tile to open that room.
+            you trust the current figure. A dash means nothing is being watched there — a gap, not calm. The word
+            under it is the room’s verdict, which also counts fired red lines, crossed thresholds, broken or
+            weakening bets, and cliffs that have passed or fall inside 180 days. Click a tile to open that room.
           </CardDescription>
         </CardHeader>
         <CardBody className="space-y-4">
@@ -307,9 +318,11 @@ function Overview({
               >
                 <p className="text-xs text-muted-foreground">{r.short}</p>
                 {r.hottest ? <PressureReading value={r.hottest.pressure} /> : <p className="mt-1 font-mono text-lg">—</p>}
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {r.crossed ? `crossed ${r.crossed.crossed_level}: ` : ""}
-                  {r.hottest?.name ?? "No active signal"}
+                <Badge tone={verdictTone(r.verdict)} className="mt-1">
+                  {verdictWord(r.verdict)}
+                </Badge>
+                <p className="mt-1 truncate text-xs text-muted-foreground" title={r.headline}>
+                  {r.headline}
                 </p>
               </button>
             ))}
@@ -413,14 +426,18 @@ function CategoriesView({
   focusId,
   onOpenAssumption,
   onOpenSignal,
+  onChanged,
 }: {
   bundle: StrategyBundle;
   focusId: number | null;
   onOpenAssumption: (id: number) => void;
   onOpenSignal: (id: number) => void;
+  onChanged: () => void;
 }) {
   const results = analyzeAllCategories(bundle);
-  const gaps = results.filter((r) => r.verdict === "gap").length;
+  const gaps = roomsWithoutWatchpoint(results).length;
+  const unwatched = unwatchedBets(bundle);
+  const editable = canEdit(bundle.my_role);
 
   useEffect(() => {
     if (!focusId) return;
@@ -431,9 +448,34 @@ function CategoriesView({
     <div className="space-y-6">
       <PageGuide title="What this screen is">
         <p>
-          Every strategy is read through the same ten rooms. This page fills each room with what this document
-          is watching — and what it is not. A signal counts in its primary room and in its second room, the same
-          way the Overview tiles count it. Click a signal or a bet to see the detail.
+          Every strategy is read through the same ten rooms. This page fills each room with what this document is
+          watching, betting on and has agreed to reopen on — and shows where it is watching nothing.
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>Watchpoints</strong> sit in the room they were given. A signal with a second room is listed there
+            too, marked “also filed here”; its pressure and crossed thresholds count in both.
+          </li>
+          <li>
+            <strong>Bets</strong> have no room of their own. A bet is shown in a room through the watchpoint that
+            tests it, so a bet in the wrong room means either the wrong watchpoint is linked to it, or that
+            watchpoint is in the wrong room. A bet with no active watchpoint sits in no room at all.
+          </li>
+          <li>
+            <strong>Red lines</strong> sit in the room they were given on the Review tab. One with no room is filed
+            under Risks until you set it.
+          </li>
+          <li>
+            <strong>Cliffs</strong> sit by kind: fiscal in Resources, legal in Mandate, review in Assumptions,
+            scenario in Risks.
+          </li>
+        </ul>
+        <p>
+          A room’s verdict rests on the register, strongest first: a fired red line, a crossed threshold, a broken
+          or weakening bet watched from the room, a cliff that has passed or is inside 180 days. Failing all of
+          those, it is the pressure band of the hottest watchpoint. The reading names whichever of them the queue
+          ranks highest, so the room and the queue never tell a different story. A room with no watchpoint is a gap,
+          not calm, even when a red line is armed there.
         </p>
         <PressureScale />
       </PageGuide>
@@ -441,7 +483,12 @@ function CategoriesView({
       <p className="text-sm text-muted-foreground">
         {gaps === 0
           ? "Every room has at least one watchpoint."
-          : `${gaps} of 10 rooms have no watchpoint. Either the document is silent there or nothing has been added yet; add a signal, or log in the decision log that the room was reviewed and has nothing to watch.`}
+          : `${gaps} of 10 rooms ${gaps === 1 ? "has" : "have"} no watchpoint. Either the document is silent there or nothing has been added yet: add a signal, or record on the room that it was reviewed and has nothing to watch.`}
+        {unwatched.length
+          ? ` ${unwatched.length} bet${unwatched.length === 1 ? " has" : "s have"} no active watchpoint and so ${
+              unwatched.length === 1 ? "sits" : "sit"
+            } in no room.`
+          : ""}
       </p>
 
       <div className="flex gap-1 overflow-x-auto pb-1">
@@ -458,6 +505,7 @@ function CategoriesView({
           <article
             key={r.id}
             id={`category-${r.id}`}
+            data-room={r.id}
             className={`scroll-mt-20 rounded-xl border p-5 ${focusId === r.id ? "border-foreground" : "border-border"}`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -471,17 +519,19 @@ function CategoriesView({
               </div>
               <div className="w-36 shrink-0">
                 {r.pressure != null ? <PressureReading value={r.pressure} /> : <p className="font-mono text-lg">—</p>}
-                <Badge tone={verdictTone(r.verdict)} className="mt-2">
-                  {r.verdict === "gap" ? "no watchpoint" : r.verdict}
+                <Badge tone={verdictTone(r.verdict)} className="mt-2" data-verdict={r.verdict}>
+                  {verdictWord(r.verdict)}
                 </Badge>
               </div>
             </div>
 
-            <p className="mt-4 text-sm">{r.reading}</p>
+            <p className="mt-4 text-sm">
+              {r.reading}
+              {r.also ? ` ${r.also}` : ""}
+            </p>
             <p className="mt-2 text-xs text-muted-foreground">Look for: {r.looksFor}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Example (Romania sample): {r.example}</p>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Watchpoints in this room</p>
                 {r.signals.length ? (
@@ -494,6 +544,7 @@ function CategoriesView({
                             {s.pressure}/{PRESSURE_RANGE.max} · {s.layer}
                             {s.stale ? " · stale" : ""}
                             {s.crossed_level !== "none" ? ` · crossed ${s.crossed_level}` : ""}
+                            {s.category !== r.id ? " · also filed here" : ""}
                           </span>
                         </button>
                       </li>
@@ -504,27 +555,112 @@ function CategoriesView({
                 )}
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Bets this room is testing</p>
-                {r.assumptions.length ? (
-                  <ul className="mt-2 space-y-2">
-                    {r.assumptions.map((a) => (
-                      <li key={a.id}>
-                        <button type="button" className="text-left text-sm hover:underline" onClick={() => onOpenAssumption(a.id)}>
-                          {a.claim}
-                          <Badge tone={statusTone(a.status)} className="ml-2">
-                            {a.status}
-                          </Badge>
-                        </button>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Red lines and cliffs in this room</p>
+                {r.interrupts.length || r.cliffs.length ? (
+                  <ul className="mt-2 space-y-2 text-sm">
+                    {r.interrupts.map((i) => (
+                      <li key={`int-${i.interrupt.id}`}>
+                        {i.interrupt.name}
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">
+                          red line · {i.interrupt.status}
+                          {i.overdue ? " · review overdue" : ""}
+                          {i.room_set ? "" : " · room not set"}
+                        </span>
+                      </li>
+                    ))}
+                    {r.cliffs.map((c) => (
+                      <li key={`cliff-${c.cliff.id}`}>
+                        {c.cliff.name}
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">
+                          {c.cliff.kind} cliff · {c.cliff.cliff_date} · {c.passed ? `passed ${-c.days}d ago` : `in ${c.days}d`}
+                          {c.decided_at ? ` · decided ${day(c.decided_at)}` : ""}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">No load-bearing assumption is linked here yet.</p>
+                  <p className="mt-2 text-sm text-muted-foreground">No red line or dated event is placed here.</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Bets watched from this room</p>
+                {r.bets.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {r.bets.map((b) => (
+                      <li key={b.assumption.id}>
+                        <button
+                          type="button"
+                          className="text-left text-sm hover:underline"
+                          onClick={() => onOpenAssumption(b.assumption.id)}
+                        >
+                          {b.assumption.claim}
+                          <Badge tone={statusTone(b.assumption.status)} className="ml-2">
+                            {b.assumption.status}
+                          </Badge>
+                        </button>
+                        <p className="text-xs text-muted-foreground">via {b.via.map((s) => s.name).join(", ")}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">No bet is watched from this room.</p>
                 )}
               </div>
             </div>
+
+            {!r.signals.length && editable ? (
+              <RoomReviewForm key={r.reviewed?.at ?? "none"} strategyId={bundle.strategy.id} room={r} onLogged={onChanged} />
+            ) : null}
           </article>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The record that someone looked at an unwatched room and found nothing to
+ * watch: a dated, attributed no-change decision keyed to the room. It goes to
+ * the log and stands for a while; it never makes the room watched.
+ */
+function RoomReviewForm({ strategyId, room, onLogged }: { strategyId: number; room: CategoryResult; onLogged: () => void }) {
+  const [rationale, setRationale] = useState("");
+  const log = useMutation({
+    mutationFn: () =>
+      logDecision({
+        data: {
+          strategy_id: strategyId,
+          intensity: "no-change",
+          summary: `Room ${room.id} ${room.short}: reviewed, nothing to watch`,
+          rationale,
+          item_key: `room-${room.id}`,
+        },
+      }),
+    onSuccess: () => {
+      toast.success(`Room ${room.id} recorded as reviewed`);
+      setRationale("");
+      onLogged();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="mt-4 rounded-md border border-border p-3">
+      <p className="text-xs text-muted-foreground">
+        {room.reviewed
+          ? `Reviewed on ${day(room.reviewed.at)}${room.reviewed.author ? ` by ${room.reviewed.author}` : ""}: “${room.reviewed.rationale}”. The room cites it for ${ROOM_REVIEW_DAYS} days and then asks again; the log keeps it. It does not make the room watched.`
+          : "If you looked at this room and there is nothing to watch, say so. The record is dated and attributed, goes to the decision log, and does not make the room watched."}
+      </p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <Textarea
+          aria-label={`Why room ${room.id} has nothing to watch`}
+          className="min-h-16 flex-1"
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+          placeholder="What you looked at, and why there is nothing to watch here."
+        />
+        <Button size="sm" variant="outline" disabled={!rationale.trim() || log.isPending} onClick={() => log.mutate()}>
+          Reviewed — nothing to watch
+        </Button>
       </div>
     </div>
   );
@@ -744,6 +880,7 @@ function itemKind(key: string) {
   if (key.startsWith("sig-")) return "signal";
   if (key.startsWith("cliff-")) return "cliff";
   if (key.startsWith("div-")) return "divergence";
+  if (key.startsWith("room-")) return "room";
   return "";
 }
 
@@ -752,9 +889,10 @@ function LogView({ bundle }: { bundle: StrategyBundle }) {
     <div className="space-y-4">
       <PageGuide title="What the log is">
         <p>
-          Every decision logged from the queue is written here with who logged it, and cannot be edited. It is
-          the proof that the document is living: why you amended Chapter 8, why you did not reset after a flood
-          season. A decision clears its queue item until the underlying condition changes again.
+          Every decision logged from the queue, and every room recorded as reviewed, is written here with who
+          logged it, and cannot be edited. It is the proof that the document is living: why you amended Chapter 8,
+          why you did not reset after a flood season. A decision clears its queue item until the underlying
+          condition changes again.
         </p>
       </PageGuide>
       {!bundle.decisions.length ? (

@@ -1,5 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { day } from "@/lib/day";
 import type { Assumption, MemberRole } from "@/lib/types";
+
+export { day };
 
 export function statusTone(s: Assumption["status"]) {
   return s;
@@ -7,15 +10,6 @@ export function statusTone(s: Assumption["status"]) {
 
 export function pct(n: number) {
   return `${Math.round(n * 100)}%`;
-}
-
-export function day(value: string | null | undefined) {
-  if (!value) return "—";
-  const t = new Date(value);
-  if (Number.isNaN(t.getTime())) return value;
-  // Date-only values (cliffs, horizons) are already a calendar day; timestamps show the local day.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return t.toLocaleDateString("en-CA");
 }
 
 export function canEdit(role: MemberRole) {
