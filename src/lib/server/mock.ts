@@ -102,8 +102,9 @@ function mockExtract(prompt: string): string {
     implied_intensity: INTENSITIES[i % INTENSITIES.length],
     owner_label: OWNERS[i % OWNERS.length],
   }));
-  // Room 9 (Evidence) is left without a watchpoint on purpose: the gauntlet exercises the gap state.
-  const ROOMS = [1, 2, 3, 4, 5, 6, 7, 8, 10, 1, 2, 4];
+  // Room 8 (Risks) is left without a watchpoint on purpose: the fixture speaks
+  // to it plainly, so the gauntlet can prove that material never colours a gap.
+  const ROOMS = [1, 2, 3, 4, 5, 6, 7, 9, 10, 1, 2, 4];
   const signals = Array.from({ length: 12 }, (_, i) => {
     const category = ROOMS[i]!;
     const label = headings[i % Math.max(1, headings.length)] ?? `Watchpoint ${i + 1}`;

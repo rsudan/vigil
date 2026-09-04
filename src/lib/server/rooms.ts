@@ -80,6 +80,8 @@ export const readDocumentIntoRooms = createServerFn({ method: "POST" })
         await tx`
           insert into room_reads (strategy_id, category, passages, terms_matched)
           values (${data.strategy_id}, ${room.category}, ${room.passages.length}, ${room.terms_matched})
+          on conflict (strategy_id, category) do update
+            set read_at = now(), passages = excluded.passages, terms_matched = excluded.terms_matched
         `;
       }
     });
@@ -229,15 +231,26 @@ ${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.publishedDate ?? "date unkno
         why: clip(f.why, 700),
       });
     }
-    if (!kept.length) {
+    // A source this room has already kept or dismissed does not come back as a
+    // fresh proposal: that would quietly undo the decision.
+    const decided = await sql<{ url: string }>`
+      select url from room_findings where strategy_id = ${data.strategy_id} and category = ${data.category}
+    `;
+    const already = new Set(decided.map((r) => normalizeUrl(r.url)));
+    const fresh = kept.filter((f) => !already.has(normalizeUrl(f.url)));
+    const repeats = kept.length - fresh.length;
+    // Only the first three are kept: a room may never look full.
+    const shown = fresh.slice(0, 3);
+    const beyond = fresh.length - shown.length;
+    if (!shown.length) {
       return {
         ok: false as const,
-        error: `Nothing came back for this room that cites a returned source${dropped ? ` (${dropped} dropped)` : ""}.`,
+        error:
+          repeats && !dropped
+            ? `Nothing new for this room: all ${repeats} result${repeats === 1 ? " was" : "s were"} already kept or dismissed here.`
+            : `Nothing came back for this room that cites a returned source${dropped ? ` (${dropped} dropped)` : ""}${repeats ? `, ${repeats} already in this room` : ""}.`,
       };
     }
-    // Only the first three are kept: a room may never look full.
-    const shown = kept.slice(0, 3);
-    const beyond = kept.length - shown.length;
     await sql.transaction(async (tx) => {
       for (const f of shown) {
         await tx`
@@ -256,6 +269,7 @@ ${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.publishedDate ?? "date unkno
       sources: sources.length,
       dropped,
       beyond,
+      repeats,
       unverified: shown.filter((f) => f.verified === false).length,
       query,
     };

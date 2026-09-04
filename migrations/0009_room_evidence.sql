@@ -46,9 +46,6 @@ create table if not exists room_findings (
   url            text not null default '',
   published_date text not null default '',
   quote          text not null default '',
-  -- true = the quotation was found in the text the search returned; false = it
-  -- was not; null = there was nothing to check. The same contract as amendments.
-  quote_verified boolean,
   why            text not null default '',
   query          text not null default '',
   searched_at    timestamptz not null default now(),

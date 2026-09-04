@@ -182,7 +182,7 @@ export async function loadBundle(
   ];
 
   const room_passages = await sql<RoomPassage>`
-    select id, category, rank, locator, quote, terms_hit, read_at::text as read_at
+    select id, category, document_id, rank, locator, quote, terms_hit, read_at::text as read_at
     from room_passages where strategy_id = ${strategyId}
     order by category, rank
   `;

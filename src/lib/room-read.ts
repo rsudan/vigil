@@ -60,7 +60,49 @@ const CHUNKS_PER_ROOM = 8;
  * same way, so the rule needs to be consistent rather than linguistically
  * correct.
  */
+/** Derivations no suffix rule reaches, in the words strategies actually use. */
+const DERIVED: Record<string, string> = {
+  assume: "assumption",
+  assumes: "assumption",
+  assumed: "assumption",
+  assuming: "assumption",
+  assumption: "assumption",
+  vulnerable: "vulnerability",
+  vulnerability: "vulnerability",
+  finance: "financing",
+  financial: "financing",
+  financing: "financing",
+  financed: "financing",
+  fund: "funding",
+  funds: "funding",
+  funded: "funding",
+  funding: "funding",
+  govern: "governance",
+  governance: "governance",
+  legal: "legal",
+  legally: "legal",
+  legislation: "legal",
+  legislative: "legal",
+  institution: "institutional",
+  institutions: "institutional",
+  institutional: "institutional",
+  coordinate: "coordination",
+  coordinates: "coordination",
+  coordinating: "coordination",
+  coordination: "coordination",
+  participate: "participation",
+  participation: "participation",
+  evaluate: "evaluation",
+  evaluating: "evaluation",
+  evaluation: "evaluation",
+  implement: "implementation",
+  implementing: "implementation",
+  implementation: "implementation",
+};
+
 export function fold(token: string): string {
+  const derived = DERIVED[token];
+  if (derived) return derived;
   let t = token;
   if (t.length > 4 && t.endsWith("ies")) t = `${t.slice(0, -3)}y`;
   else if (t.length > 3 && t.endsWith("s") && !t.endsWith("ss")) t = t.slice(0, -1);
@@ -86,48 +128,152 @@ function normalizeRepeat(s: string) {
 /** Abbreviations whose full stop ends a word, not a sentence. */
 const ABBREVIATION = /\b(?:no|nr|art|alin|lit|para|pp?|cf|etc|vs|dr|mr|mrs|ms|fig|vol|ch|sec|ed|approx)\.$/i;
 
-function splitSentences(body: string): string[] {
-  const flat = body.replace(/\s+/g, " ");
-  const out: string[] = [];
-  let buf = "";
-  for (const piece of flat.split(/(?<=[.;:!?])\s+|[•●]/)) {
-    buf = buf ? `${buf} ${piece}` : piece;
-    // "Decision No. 566/2024" is one sentence, not two.
-    if (ABBREVIATION.test(buf)) continue;
-    out.push(buf);
-    buf = "";
+/** Words a wrapped line of prose ends on; a heading never does. */
+const DANGLING = /\b(?:of|the|a|an|in|on|at|to|for|and|or|with|by|as|is|are|was|were|that|which|from|into|than|then|its|their|this|these|those|be|been|has|have|had|not|no|but|per|over|under|between)$/i;
+
+/**
+ * A line that titles what follows rather than saying anything itself. Getting
+ * this right is what stops "4.5. Poverty, Inclusion, and Social Cohesion" being
+ * welded onto the sentence beneath it and quoted as one.
+ */
+function isHeading(line: string, next?: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  const words = t.split(/\s+/).length;
+  if (/[,;]$/.test(t)) return false;
+  if (words <= 12 && /:$/.test(t)) return true;
+  if (words <= 12 && /^\d+(\.\d+)*\.?\s+\S/.test(t) && !/[.!?]$/.test(t)) return true;
+  if (words <= 14 && t === t.toUpperCase() && /[A-Z]{3}/.test(t)) return true;
+  // A short line that ends no sentence, dangles on no word, and is followed by a
+  // fresh capital is a title: "Legislative Framework and Institutional Development".
+  if (words <= 10 && !/[.!?:;]$/.test(t) && /^[A-Z0-9]/.test(t) && !DANGLING.test(t) && next && /^[A-Z]/.test(next.trim())) {
+    return true;
   }
-  if (buf) out.push(buf);
-  return out
-    .map((x) => x.trim())
-    .filter((x) => x.length >= 60 && x.length <= 400 && /[a-z]{4}/i.test(x));
+  return false;
+}
+
+/** A line that opens a new item in a list, rather than continuing the last one. */
+function isListItem(line: string): boolean {
+  return /^\s*(?:\d+[.)]|[-*\u2022\u25cf\u25aa\u2013])\s+\S/.test(line);
+}
+
+function stripMarker(line: string): string {
+  return line.replace(/^\s*(?:\d+[.)]|[-*\u2022\u25cf\u25aa\u2013])\s+/, "").trim();
 }
 
 /**
- * A sentence repeated across half the document is a running header, page
- * furniture or boilerplate. Quoting a gazette masthead as what the document
- * says about resources would be worse than saying nothing.
+ * Table rows, column headers and all-caps titles read as prose once a PDF has
+ * been flattened, and quoting one as what the document says would be worse than
+ * saying nothing. Keep only text that reads like a sentence a person wrote.
+ */
+export function readsLikeProse(text: string, fromList = false): boolean {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (tokens.length < 8) return false;
+  if (!/\b[a-z]{4,}\b/.test(text)) return false;
+  // A sentence starts where a sentence starts. A fragment carved out of a table
+  // cell begins in the middle of a phrase; only a list item may begin lowercase.
+  if (!fromList && !/^[A-Z0-9"“(]/.test(text)) return false;
+  const shouty = tokens.filter((t) => /^[A-Z][A-Z/.-]{1,7}$/.test(t)).length;
+  if (shouty / tokens.length > 0.25) return false;
+  // "Implementation Period Expected Results Evaluation Stages Indicators Targets
+  // Funding Sources" is a column-header strip, not a sentence.
+  const titled = tokens.filter((t) => /^[A-Z][a-z]/.test(t)).length;
+  if (tokens.length >= 8 && titled / tokens.length >= 0.4) return false;
+  const numbers = text.match(/\d{2,}/g) ?? [];
+  if (numbers.length >= 4) return false;
+  const lower = tokens.filter((t) => /^[a-z]/.test(t)).length;
+  return lower / tokens.length >= 0.35;
+}
+
+/**
+ * The quotable sentences in one chunk. Lines are honoured before anything is
+ * flattened: a heading titles what follows rather than belonging to it, a list
+ * item stands on its own, and a wrapped paragraph is rejoined before it is
+ * split. Sentences end at a full stop, never at a semicolon or a colon, because
+ * a clause cut off from "the strategy does not provide for the following:"
+ * would assert the opposite of the document.
+ */
+function splitSentences(body: string, furniture: Set<string> = new Set()): string[] {
+  const out: { text: string; fromList: boolean }[] = [];
+  let para: string[] = [];
+  let fromList = false;
+  const flush = () => {
+    const text = para.join(" ").replace(/\s+/g, " ").trim();
+    const wasList = fromList;
+    para = [];
+    fromList = false;
+    if (!text) return;
+    let buf = "";
+    let first = true;
+    for (const piece of text.split(/(?<=[.!?])\s+/)) {
+      buf = buf ? `${buf} ${piece}` : piece;
+      // "Decision No. 566/2024" is one sentence, not two.
+      if (ABBREVIATION.test(buf)) continue;
+      out.push({ text: buf, fromList: wasList && first });
+      first = false;
+      buf = "";
+    }
+    if (buf) out.push({ text: buf, fromList: wasList && first });
+  };
+  const lines = body.split("\n");
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || furniture.has(normalizeRepeat(line)) || isHeading(line, lines[i + 1])) {
+      flush();
+      return;
+    }
+    if (isListItem(line)) {
+      flush();
+      fromList = true;
+      para.push(stripMarker(line));
+      return;
+    }
+    para.push(line);
+  });
+  flush();
+  return out
+    .map((x) => ({ ...x, text: x.text.trim().replace(/[;,]$/, "") }))
+    .filter((x) => x.text.length >= 60 && x.text.length <= 400 && readsLikeProse(x.text, x.fromList))
+    .map((x) => x.text);
+}
+
+/**
+ * Lines that recur across the document are running headers, page furniture or
+ * boilerplate: the masthead of an official journal carries the page number, so
+ * every occurrence differs until the digits are stripped. Quoting one as what
+ * the document says about resources would be worse than saying nothing.
  */
 export function boilerplate(chunks: ReadChunk[]): Set<string> {
   const counts = new Map<string, number>();
   for (const c of chunks) {
-    for (const key of new Set(splitSentences(c.body).map(normalizeRepeat))) {
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
+    const lines = new Set(
+      c.body
+        .split("\n")
+        .map((l) => normalizeRepeat(l))
+        .filter((l) => l.length >= 8),
+    );
+    for (const key of lines) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const floor = Math.max(2, Math.ceil(chunks.length * 0.5));
+  const floor = Math.max(2, Math.ceil(chunks.length * 0.25));
   return new Set([...counts.entries()].filter(([, n]) => n >= floor).map(([k]) => k));
 }
 
 /**
- * Where a quote came from, in as few words as carry a reader back to it. A
- * paged chunk heading is "p. 16 · <first line of the page>", and on a gazette
- * or an official journal that first line is the running masthead, so the page
- * alone is the honest locator. Unpaged documents keep their heading.
+ * Where a quote came from, in as few words as carry a reader back to it.
+ *
+ * A paged chunk heading is "p. 16 · <first line of the page>", and on a gazette
+ * that first line is the running masthead, so the page alone is the honest
+ * locator. A Word, text or pasted document has no pages, and its heading is
+ * only the chunk's first line, which is as likely to be furniture as a title:
+ * there, the position in the document is the one thing that carries a reader
+ * back, so say that instead of quoting a masthead as a citation.
  */
-export function locatorOf(heading: string): string {
+export function locatorOf(heading: string, position?: { index: number; total: number }): string {
   const page = heading.match(/^p\.\s*[0-9]+(?:\s*[–-]\s*[0-9]+)?/);
-  return (page ? page[0] : heading.slice(0, 80)).trim();
+  if (page) return page[0].trim();
+  const title = heading.trim();
+  if (title && title.length <= 70 && isHeading(title, "A")) return title;
+  return position ? `part ${position.index + 1} of ${position.total}` : title.slice(0, 70);
 }
 
 type Candidate = { quote: string; locator: string; hits: number; key: string; documentId: number | null };
@@ -139,6 +285,7 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
 
   // Does the rooms' vocabulary fit this text at all? Decided over all ten rooms
   // together, so one quiet room is never mistaken for a failed search.
+  const index = new Map(chunks.map((c, i) => [c, i] as const));
   const vocabulary = new Set(CATEGORY_GUIDE.flatMap((g) => tokenize(g.terms).map(fold)));
   const present = [...vocabulary].filter((t) => corpus.has(t)).length;
   const fits = vocabulary.size > 0 && present / vocabulary.size >= MIN_VOCABULARY_SHARE;
@@ -152,15 +299,22 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
     const found: Candidate[] = [];
     const seen = new Set<string>();
     for (const chunk of rankChunks(chunks, [guide.terms.split(" ").flatMap(variants).join(" ")], CHUNKS_PER_ROOM)) {
-      for (const sentence of splitSentences(chunk.body)) {
+      const at = index.get(chunk) ?? 0;
+      for (const sentence of splitSentences(chunk.body, junk)) {
         const key = normalizeRepeat(sentence);
-        if (junk.has(key) || seen.has(key)) continue;
+        if (seen.has(key)) continue;
         const words = new Set(tokenize(sentence).map(fold));
         let hits = 0;
         for (const t of terms) if (words.has(t)) hits += 1;
         if (hits < MIN_TERMS) continue;
         seen.add(key);
-        found.push({ quote: sentence, locator: locatorOf(chunk.heading), hits, key, documentId: chunk.documentId ?? null });
+        found.push({
+          quote: sentence,
+          locator: locatorOf(chunk.heading, { index: at, total: chunks.length }),
+          hits,
+          key,
+          documentId: chunk.documentId ?? null,
+        });
       }
     }
     candidates.set(guide.id, found);

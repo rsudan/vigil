@@ -264,6 +264,8 @@ export type Metrics = {
 export type RoomPassage = {
   id: number;
   category: number;
+  /** Which stored document the sentence was quoted from. */
+  document_id: number;
   rank: number;
   locator: string;
   quote: string;

@@ -173,10 +173,16 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     } else if (!r.read.terms_matched) {
       parts.push("From the document: too few of this room's words appear in the stored text for the search to mean anything, so the search failed rather than the document being silent.");
     } else if (!r.passages.length) {
-      parts.push("From the document: silent on this room.");
+      parts.push(
+        "From the document: nothing scored high enough to quote for this room. The strategy may be silent here, or may say it in other words.",
+      );
     } else {
       parts.push("From the document (verbatim, found by lexical search):");
-      for (const p of r.passages) parts.push(`- ${p.locator}: "${line(p.quote)}"`);
+      const files = bundle.documents.length > 1 ? new Map(bundle.documents.map((d) => [d.id, d.filename] as const)) : null;
+      for (const p of r.passages) {
+        const where = files ? `${files.get(p.document_id) ?? "unknown file"} · ${p.locator}` : p.locator;
+        parts.push(`- ${where}: "${line(p.quote)}"`);
+      }
     }
     if (r.findings.length) {
       parts.push("From the world (each cites a source the search returned):");

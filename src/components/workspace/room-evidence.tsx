@@ -28,22 +28,33 @@ export function RoomEvidence({
 }) {
   const editable = canEdit(bundle.my_role);
   const gap = !room.signals.length;
+  // "p. 4" says nothing when a strategy has a document and an annex on file.
+  const files =
+    bundle.documents.length > 1 ? new Map(bundle.documents.map((d) => [d.id, d.filename] as const)) : null;
   return (
     <div className="mt-5 space-y-3 border-t border-border pt-4">
-      <DocumentSection room={room} gap={gap} />
+      <DocumentSection room={room} gap={gap} files={files} />
       <WorldSection bundle={bundle} room={room} gap={gap} editable={editable} onChanged={onChanged} />
     </div>
   );
 }
 
-function DocumentSection({ room, gap }: { room: CategoryResult; gap: boolean }) {
+function DocumentSection({
+  room,
+  gap,
+  files,
+}: {
+  room: CategoryResult;
+  gap: boolean;
+  files: Map<number, string> | null;
+}) {
   const summary = !room.read
     ? "What the document says — not read yet"
     : !room.read.terms_matched
       ? "What the document says — this room’s words do not match this text"
       : room.passages.length
         ? `What the document says (${room.passages.length})`
-        : "What the document says — silent here";
+        : "What the document says — nothing quotable here";
   return (
     <details open={gap} className="rounded-md border border-border p-3">
       <summary className="cursor-pointer text-xs uppercase tracking-wider text-muted-foreground">{summary}</summary>
@@ -61,14 +72,16 @@ function DocumentSection({ room, gap }: { room: CategoryResult; gap: boolean }) 
           </p>
         ) : !room.passages.length ? (
           <p className="text-sm text-muted-foreground">
-            The document is silent on this room. That is a finding: read {room.short} as a room the strategy never
-            addressed, not as one that is calm.
+            Nothing in the stored text scored high enough to quote for {room.short}. That may be because the strategy
+            is silent here, or because it says it in words this room does not use. Check the document before you call
+            this a blind spot — and if the strategy really is silent, that is a finding.
           </p>
         ) : (
           room.passages.map((p) => (
             <figure key={p.id} className="border-l-2 border-border pl-3">
               <blockquote className="text-sm text-pretty">{p.quote}</blockquote>
               <figcaption className="mt-1 font-mono text-xs text-muted-foreground">
+                {files ? `${files.get(p.document_id) ?? "unknown file"} · ` : ""}
                 {p.locator} · found by lexical search, not interpreted
               </figcaption>
             </figure>

@@ -305,6 +305,7 @@ describe("what the document says, and what the world says", () => {
   const passage = (category: number, locator: string, id = category) => ({
     id,
     category,
+    document_id: 1,
     rank: 0,
     locator,
     quote: "The budget allocated to youth programmes covers staff and infrastructure at the central level.",
@@ -337,11 +338,19 @@ describe("what the document says, and what the world says", () => {
       cliffs: [cliff(1, -40, "legal")],
     };
     const bare = analyzeAllCategories(bundle(register), NOW);
+    const rooms = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const loaded = analyzeAllCategories(
       bundle({
         ...register,
-        room_passages: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((c) => passage(c, `p. ${c}`)),
-        room_findings: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((c) => finding(c, "proposed")),
+        room_passages: rooms.map((c) => passage(c, `p. ${c}`)),
+        // Every state a candidate can be in, because a kept one is the most
+        // likely to be wired into a colour by a later change.
+        room_findings: [
+          ...rooms.map((c) => finding(c, "proposed")),
+          ...rooms.map((c) => finding(c, "kept")),
+          ...rooms.map((c) => finding(c, "dismissed")),
+        ],
+        room_reads: rooms.map((c) => ({ category: c, read_at: iso(-1), passages: 1, terms_matched: true })),
       }),
       NOW,
     );
@@ -349,8 +358,14 @@ describe("what the document says, and what the world says", () => {
       assert.equal(loaded[i]!.verdict, bare[i]!.verdict, `room ${bare[i]!.id} changed verdict`);
       assert.equal(loaded[i]!.headline, bare[i]!.headline, `room ${bare[i]!.id} changed headline`);
       assert.equal(loaded[i]!.pressure, bare[i]!.pressure, `room ${bare[i]!.id} changed pressure`);
+      assert.equal(loaded[i]!.band?.id ?? null, bare[i]!.band?.id ?? null, `room ${bare[i]!.id} changed band`);
       assert.equal(loaded[i]!.also, bare[i]!.also, `room ${bare[i]!.id} changed its second sentence`);
     }
+    assert.equal(
+      roomsWithoutWatchpoint(loaded).length,
+      roomsWithoutWatchpoint(bare).length,
+      "material changed how many rooms count as unwatched",
+    );
   });
 
   it("makes an unwatched room read worse, not fuller, when the document speaks there", () => {

@@ -4,8 +4,9 @@ import { MAX_PASSAGES, boilerplate, fold, locatorOf, readRooms, type ReadChunk }
 
 const MASTHEAD = "OFFICIAL GAZETTE OF THE REPUBLIC, PART I, No. 516 bis of June 3, 2024, printed by the state press.";
 
+// A real page puts its running header on its own line, above the text.
 function chunk(page: number, body: string, documentId = 1): ReadChunk {
-  return { heading: `p. ${page} · ${MASTHEAD.slice(0, 40)}`, body: `${MASTHEAD} ${body}`, documentId };
+  return { heading: `p. ${page} · ${MASTHEAD.slice(0, 40)}`, body: `${MASTHEAD}\n${body}`, documentId };
 }
 
 /** A short document that talks about money and delivery and nothing else. */
@@ -37,15 +38,19 @@ describe("locatorOf", () => {
     assert.equal(locatorOf("p. 16 · 16OFFICIAL GAZETTE OF THE REPUBLIC, PART I"), "p. 16");
     assert.equal(locatorOf("p. 12–13 · 8.2 Monitoring"), "p. 12–13");
   });
-  it("keeps the heading when the document has no pages", () => {
-    assert.equal(locatorOf("Chapter 6 Financing"), "Chapter 6 Financing");
+  it("keeps a real heading when the document has no pages", () => {
+    assert.equal(locatorOf("Chapter 6 Financing:"), "Chapter 6 Financing:");
+  });
+  it("falls back to a position rather than citing a masthead", () => {
+    const masthead = "OFFICIAL GAZETTE OF THE REPUBLIC, PART I, No. 516 bis of June 3, 2024, printed by the state press.";
+    assert.equal(locatorOf(masthead, { index: 33, total: 97 }), "part 34 of 97");
   });
 });
 
 describe("boilerplate", () => {
-  it("finds a sentence repeated across the document, ignoring the page number in it", () => {
+  it("finds a line repeated across the document, ignoring the page number welded to it", () => {
     const junk = boilerplate(moneyDoc());
-    assert.equal(junk.size, 1, "the masthead is the only repeated sentence");
+    assert.equal(junk.size, 1, "the masthead is the only repeated line");
     assert.ok([...junk][0]!.includes("official gazette of the republic"));
   });
   it("never quotes the running header as what the document says", () => {
@@ -163,5 +168,101 @@ describe("readRooms", () => {
       readRooms(moneyDoc()).map((r) => r.category),
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     );
+  });
+});
+
+describe("what is quotable, and what is furniture", () => {
+  it("never cuts a clause away from the negation that governs it", () => {
+    const doc = [
+      {
+        heading: "p. 9 · Chapter 6",
+        body:
+          "Chapter 6 Financing\nThe strategy does not provide dedicated financing for the following: the budget allocation for youth programmes covering staff, capacity and infrastructure at the central level.",
+        documentId: 1,
+      },
+      chunk(2, "The council keeps its mandate under the law and meets four times a year to approve the action plan."),
+    ];
+    for (const room of readRooms(doc)) {
+      for (const p of room.passages) {
+        assert.ok(
+          !/^the budget allocation for youth programmes/i.test(p.quote),
+          `a clause was cut from its negation: ${p.quote}`,
+        );
+      }
+    }
+  });
+
+  it("does not weld a heading onto the sentence beneath it", () => {
+    const doc = [
+      {
+        heading: "p. 21 · 4.5",
+        body:
+          "4.5. Poverty, Inclusion, and Social Cohesion\nPoverty affects the vulnerable segments of the population, and access to services for rural youth is uneven.\nIncome inequality has widened over recent decades.",
+        documentId: 1,
+      },
+      chunk(2, "The budget allocated to the ministry covers staff and infrastructure at the central level of government."),
+    ];
+    const legitimacy = readRooms(doc).find((r) => r.category === 7)!;
+    assert.ok(legitimacy.passages.length >= 1);
+    for (const p of legitimacy.passages) {
+      assert.ok(!/Poverty, Inclusion, and Social Cohesion Poverty/.test(p.quote), `heading welded on: ${p.quote}`);
+    }
+  });
+
+  it("never quotes a flattened table row or a column-header strip", () => {
+    const doc = [
+      {
+        heading: "p. 67 · Annex 1",
+        body:
+          "Entities Measures Responsible Parties Partners Implementation Period Expected Results Evaluation Stages Indicators Targets Funding Sources\nMFTES IIS DJFT DFTMB MDLPA AAPL ANOFM NGO DGASPC ANPDCA 2024 2027 Expansion and diversification of vocational guidance activities\nSTIMULATING THE PARTICIPATION OF YOUNG PEOPLE IN THE LABOUR MARKET AND IN PUBLIC LIFE",
+        documentId: 1,
+      },
+      chunk(2, "The budget allocated to the ministry covers staff and infrastructure at the central level of government."),
+    ];
+    for (const room of readRooms(doc)) {
+      for (const p of room.passages) {
+        assert.ok(!/Entities Measures Responsible/.test(p.quote), `column headers quoted: ${p.quote}`);
+        assert.ok(!/DGASPC/.test(p.quote), `an acronym table row was quoted: ${p.quote}`);
+        assert.ok(!/^STIMULATING/.test(p.quote), `an all-caps title was quoted: ${p.quote}`);
+      }
+    }
+  });
+
+  it("keeps a list item that begins lowercase, and drops a fragment carved out of a table cell", () => {
+    const listed = [
+      {
+        heading: "p. 58 · Measures",
+        body:
+          "Measures:\n- increasing funding and access to financing in the youth sector through more substantial budget allocations for local competitions;",
+        documentId: 1,
+      },
+      chunk(2, "The council keeps its mandate under the law and meets four times a year to approve the action plan."),
+    ];
+    const resources = readRooms(listed).find((r) => r.category === 5)!;
+    assert.ok(
+      resources.passages.some((p) => p.quote.startsWith("increasing funding")),
+      "a list item is a sentence even when it begins lowercase",
+    );
+    const cell = [
+      {
+        heading: "p. 98 · Annex",
+        body: "for youth in rural areas At least 1 accelerator Inclusion of the participation of rural youth in funding programs",
+        documentId: 1,
+      },
+      chunk(2, "The council keeps its mandate under the law and meets four times a year to approve the action plan."),
+    ];
+    for (const room of readRooms(cell)) {
+      for (const p of room.passages) {
+        assert.ok(!/^for youth in rural areas/.test(p.quote), `a table-cell fragment was quoted: ${p.quote}`);
+      }
+    }
+  });
+
+  it("meets the words a strategy uses to state a bet", () => {
+    assert.equal(fold("assumes"), fold("assumption"));
+    assert.equal(fold("assumed"), fold("assumption"));
+    assert.equal(fold("vulnerable"), fold("vulnerability"));
+    assert.equal(fold("financial"), fold("financing"));
+    assert.equal(fold("institutions"), fold("institutional"));
   });
 });
