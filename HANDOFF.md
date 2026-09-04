@@ -21,7 +21,7 @@ Owner: Randeep Sudan (rsudan@gmail.com, GitHub `rsudan`). He is the method's aut
 
 ```bash
 npm run dev                      # http://localhost:8080; first account is administrator; data persists in .pglite/
-npm test                         # 107 unit tests (queue, validity, rooms, reading the document, extraction windows, retrieval, crypto, rate limits)
+npm test                         # 114 unit tests (queue, validity, rooms, reading the document, extraction windows, retrieval, crypto, rate limits)
 npm run gauntlet                 # end to end in a real browser on a fresh database with the mock: 31 steps
 npm run gauntlet -- --real       # same against real keys (XAI_API_KEY etc., EXA_API_KEY, JINA_API_KEY); costs money
 npx tsc --noEmit && npx eslint . # both must be clean
@@ -35,7 +35,7 @@ Settings are documented in `.env.example`: `VIGIL_KEY_SECRET`, `VIGIL_PLATFORM_K
 ## Code map
 
 - `src/lib/compute.ts`: `buildQueue` (ranked, decision-aware), `buildMetrics`, `validityOf`, `cellReading`, `thresholdText`, `daysUntil` (calendar days, shared with the rooms). Pure, unit-tested.
-- `src/lib/room-read.ts`: reading the uploaded document into the ten rooms. Pure and modelless: lexical search over stored chunks, then a sentence is kept only if it carries two of that room's `terms` (in `category-guide.ts`), folded so "ministries" meets "ministry". Returns a verbatim sentence and its page. Distinguishes silent (searched, absent) from terms-unmatched (the search itself failed, usually another language).
+- `src/lib/room-read.ts`: reading the uploaded document into the ten rooms. Pure and modelless: lexical search over stored chunks, then a sentence is kept only if it carries two of that room's `terms` (in `category-guide.ts`), folded so "ministries" meets "ministry" and "assumes" meets "assumption". Segmentation works on lines before anything is flattened, so a heading never welds onto the sentence below it, a list item stands alone, and sentences end at a full stop and never at a semicolon or colon. `readsLikeProse` rejects flattened table rows, column-header strips and all-caps titles. Returns a verbatim sentence with its page, or its position when the document has no pages.
 - `src/lib/server/rooms.ts`: `readDocumentIntoRooms` (free, no key), `searchRoom` (one Exa call and one model call per room, only on a click, grounded like `researchPeers`), `decideRoomFinding`.
 - `src/lib/category-analysis.ts`: the ten rooms. What sits in a room (watchpoints by their own room; bets only through a home watchpoint; red lines by `interrupts.category`, Risks when unset; cliffs by kind), the verdict, and a reading that names the strongest fact ranked as `RANK` in compute.ts ranks it. `src/lib/day.ts` is the one calendar-day helper for every screen and export.
 - `src/lib/glossary.ts`: all user-facing terms, `RAG_HELP` with `deliveryWord()`, `VALIDITY_HELP`, `CELL_READINGS` (the nine cell sentences, in Randeep's voice, not yet signed off by him).
@@ -46,7 +46,7 @@ Settings are documented in `.env.example`: `VIGIL_KEY_SECRET`, `VIGIL_PLATFORM_K
 - `src/lib/server/keys.ts`, `crypto.ts`, `rate-limit.ts`, `access.ts`, `schemas.ts`: keys encrypted at rest, per-user rate limits, roles, zod on every input.
 - `src/components/strategy-workspace.tsx`: the workspace shell, Overview, Categories, boards, log. `src/components/workspace/*`: assessment card and dialog, assumption and signal drawers and forms, queue, review, peers, team, settings.
 - `scripts/gauntlet/run.mjs` and `fixture-pdf.mjs`: the end-to-end runner and the synthetic 41-page strategy.
-- `migrations/0001`–`0009`: applied automatically by PGLite; `0009_room_evidence.sql` is the latest (`strategies.jurisdiction`, `room_passages`, `room_reads`, `room_findings`).
+- `migrations/0001`–`0010`: applied automatically by PGLite; `0009_room_evidence.sql` adds `strategies.jurisdiction`, `room_passages`, `room_reads` and `room_findings`, and `0010_room_finding_quote.sql` adds `room_findings.quote_verified`. Never edit a migration that has been committed: both appliers key `_migrations` by filename, so an edited file is never re-run and the change silently never reaches a database that already had it.
 
 ## Working conventions that have held
 
