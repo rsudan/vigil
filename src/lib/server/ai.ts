@@ -305,9 +305,11 @@ export const extractStrategy = createServerFn({ method: "POST" })
           const i = raw as Record<string, unknown>;
           const name = clip(i.name, 180).trim();
           if (!name) continue;
+          // The room the model named, or null: never a silent default.
+          const room = i.category == null || i.category === "" ? null : asInt(i.category, 1, 10, 0) || null;
           await tx`
-            insert into interrupts (strategy_id, user_id, name, red_line, status)
-            values (${id}, ${context.userId}, ${name}, ${clip(i.red_line, 400)}, 'armed')
+            insert into interrupts (strategy_id, user_id, name, red_line, category, status)
+            values (${id}, ${context.userId}, ${name}, ${clip(i.red_line, 400)}, ${room}, 'armed')
           `;
         }
         const cliffs = Array.isArray(parsed.cliffs) ? parsed.cliffs.slice(0, 8) : [];

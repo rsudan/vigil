@@ -102,8 +102,10 @@ function mockExtract(prompt: string): string {
     implied_intensity: INTENSITIES[i % INTENSITIES.length],
     owner_label: OWNERS[i % OWNERS.length],
   }));
+  // Room 9 (Evidence) is left without a watchpoint on purpose: the gauntlet exercises the gap state.
+  const ROOMS = [1, 2, 3, 4, 5, 6, 7, 8, 10, 1, 2, 4];
   const signals = Array.from({ length: 12 }, (_, i) => {
-    const category = (i % 10) + 1;
+    const category = ROOMS[i]!;
     const label = headings[i % Math.max(1, headings.length)] ?? `Watchpoint ${i + 1}`;
     return {
       name: `${label.slice(0, 60)} — indicator ${part}.${i + 1}`,
@@ -126,9 +128,9 @@ function mockExtract(prompt: string): string {
     };
   });
   const interrupts = [
-    { name: "Coordinating body stops sitting", red_line: "No sitting of the coordinating body for six months." },
-    { name: "Platform outage", red_line: "A named platform unavailable for more than 14 days." },
-    { name: "Funding withdrawn", red_line: "A financing source named in the strategy is withdrawn or cut by more than 30%." },
+    { name: "Coordinating body stops sitting", red_line: "No sitting of the coordinating body for six months.", category: 6 },
+    { name: "Platform outage", red_line: "A named platform unavailable for more than 14 days.", category: 2 },
+    { name: "Funding withdrawn", red_line: "A financing source named in the strategy is withdrawn or cut by more than 30%.", category: 5 },
   ];
   const cliffs = (upcoming.length ? upcoming : years.slice(-2)).slice(0, 2).map((y, i) => ({
     name: i === 0 ? `Funding window closes ${y}` : `Mid-term review ${y}`,

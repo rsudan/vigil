@@ -227,3 +227,23 @@ export function cadenceDays(cadence: string) {
 export function categoryById(id: number) {
   return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0];
 }
+
+/** The room a red line reads in when none was named: "red lines agreed in advance" is room 8. */
+export const INTERRUPT_DEFAULT_ROOM = 8;
+
+/** A cliff's kind already says which room it belongs to. */
+export const CLIFF_ROOM: Record<(typeof CLIFF_KINDS)[number], number> = {
+  fiscal: 5,
+  legal: 6,
+  review: 3,
+  scenario: 8,
+};
+
+export function roomOfCliff(cliff: { kind: string }): number {
+  return CLIFF_ROOM[cliff.kind as (typeof CLIFF_KINDS)[number]] ?? INTERRUPT_DEFAULT_ROOM;
+}
+
+export function roomOfInterrupt(interrupt: { category: number | null }): number {
+  const c = interrupt.category;
+  return c != null && c >= 1 && c <= 10 ? c : INTERRUPT_DEFAULT_ROOM;
+}

@@ -158,7 +158,9 @@ export const strategies = {
     strategy_id: id,
     name: text(180).min(1, "Name the red line"),
     red_line: text(400).min(1, "Describe the red line"),
+    category: category.nullable().optional(),
   }),
+  setInterruptRoom: z.object({ strategy_id: id, id, category: category.nullable() }),
   logDecision: z.object({
     strategy_id: id,
     intensity: z.enum(INTENSITIES),

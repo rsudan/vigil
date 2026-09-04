@@ -141,18 +141,36 @@ export function analysisMarkdown(bundle: StrategyBundle) {
       `Pressure: ${r.pressure == null ? "none (gap)" : `${r.pressure}/${PRESSURE_RANGE.max} (${r.verdict})`}`,
     );
     parts.push(`Reading: ${r.reading}`);
+    if (r.also) parts.push(r.also);
+    if (r.reviewed) parts.push(`Reviewed ${day(r.reviewed.at)}${r.reviewed.author ? ` by ${r.reviewed.author}` : ""}: nothing to watch.`);
     if (r.signals.length) {
       parts.push("Watchpoints:");
       for (const sig of r.signals) {
         parts.push(
-          `- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer}${sig.crossed_level !== "none" ? `, crossed ${sig.crossed_level}` : ""})`,
+          `- ${sig.name} (${sig.pressure}/${PRESSURE_RANGE.max}, ${sig.layer}${sig.crossed_level !== "none" ? `, crossed ${sig.crossed_level}` : ""}${
+            sig.category !== r.id ? ", also filed here" : ""
+          })`,
         );
       }
     }
-    if (r.assumptions.length) {
-      parts.push("Linked bets:");
-      for (const a of r.assumptions) {
-        parts.push(`- ${line(a.claim)} (${a.status})`);
+    if (r.interrupts.length) {
+      parts.push("Red lines:");
+      for (const i of r.interrupts) {
+        parts.push(`- ${i.interrupt.name} (${i.interrupt.status}${i.overdue ? ", review overdue" : ""}${i.room_set ? "" : ", room not set"})`);
+      }
+    }
+    if (r.cliffs.length) {
+      parts.push("Cliffs:");
+      for (const c of r.cliffs) {
+        parts.push(
+          `- ${c.cliff.name} — ${c.cliff.cliff_date} (${c.cliff.kind}, ${c.passed ? `passed ${-c.days} days ago` : `in ${c.days} days`}${c.decided_at ? `, decided ${day(c.decided_at)}` : ""})`,
+        );
+      }
+    }
+    if (r.bets.length) {
+      parts.push("Bets watched from this room:");
+      for (const b of r.bets) {
+        parts.push(`- ${line(b.assumption.claim)} (${b.assumption.status}; via ${b.via.map((s) => s.name).join(", ")})`);
       }
     }
     parts.push("");

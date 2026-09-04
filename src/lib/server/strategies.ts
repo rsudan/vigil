@@ -84,7 +84,7 @@ export async function loadBundle(
   `;
   const signals = signalRows.map((row) => withPressure(row));
   const interrupts = await sql<Interrupt>`
-    select id, strategy_id, name, red_line, fired_at::text as fired_at,
+    select id, strategy_id, name, red_line, category, fired_at::text as fired_at,
            review_by::text as review_by, status, created_at::text as created_at
     from interrupts where strategy_id = ${strategyId}
     order by id
@@ -357,8 +357,8 @@ export const loadRomaniaSample = createServerFn({ method: "POST" })
       }
       for (const i of ROMANIA_SEED.interrupts) {
         await tx`
-          insert into interrupts (strategy_id, user_id, name, red_line, status)
-          values (${id}, ${context.userId}, ${i.name}, ${i.red_line}, 'armed')
+          insert into interrupts (strategy_id, user_id, name, red_line, category, status)
+          values (${id}, ${context.userId}, ${i.name}, ${i.red_line}, ${i.category}, 'armed')
         `;
       }
       for (const c of ROMANIA_SEED.cliffs) {
@@ -794,8 +794,23 @@ export const addInterrupt = createServerFn({ method: "POST" })
     const sql = await getSql();
     await assertAccess(context.userId, data.strategy_id, "editor", sql);
     await sql`
-      insert into interrupts (strategy_id, user_id, name, red_line, status)
-      values (${data.strategy_id}, ${context.userId}, ${data.name}, ${data.red_line}, 'armed')
+      insert into interrupts (strategy_id, user_id, name, red_line, category, status)
+      values (${data.strategy_id}, ${context.userId}, ${data.name}, ${data.red_line}, ${data.category ?? null}, 'armed')
+    `;
+    await touch(sql, data.strategy_id);
+    return { ok: true as const };
+  });
+
+/** Which room a red line belongs to. Null means "not named"; the room reads it as Risks. */
+export const setInterruptRoom = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(validate(schema.setInterruptRoom))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await assertAccess(context.userId, data.strategy_id, "editor", sql);
+    await sql`
+      update interrupts set category = ${data.category}
+      where id = ${data.id} and strategy_id = ${data.strategy_id}
     `;
     await touch(sql, data.strategy_id);
     return { ok: true as const };

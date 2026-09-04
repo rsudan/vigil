@@ -62,7 +62,7 @@ export const EXTRACTION_SHAPE = `{
   "horizon_end": "YYYY-MM-DD" or null,
   "assumptions": [{ "claim": string, "origin": "stated" or "implicit", "implied_intensity": "watch"|"amend"|"refresh"|"reset", "owner_label": string }],
   "signals": [{ "name": string, "category": 1-10, "secondary_category": null or 1-10, "layer": "sentinel"|"rotating", "materiality":1-5, "velocity":1-5, "confidence":1-5, "cadence":"monthly"|"quarterly"|"annual"|"event-driven"|"continuous", "baseline": string, "current_value": string, "threshold_watch": string, "threshold_amend": string, "threshold_refresh": string, "threshold_reset": string, "false_positive_guard": string, "owner_label": string, "assumption_indexes": number[] }],
-  "interrupts": [{ "name": string, "red_line": string }],
+  "interrupts": [{ "name": string, "red_line": string, "category": 1-10 }],
   "cliffs": [{ "name": string, "cliff_date": "YYYY-MM-DD", "kind": "fiscal"|"legal"|"scenario"|"review" }]
 }`;
 
@@ -80,7 +80,7 @@ Rules:
 - 10–16 signals. Cover as many of the ten rooms as the document supports. At most 8 are sentinels (the readings that would actually force a rewrite); the rest are rotating. If the document is genuinely silent on a room, leave that room empty rather than invent a watchpoint.
 - Every signal names the reading that would justify watch / amend / refresh / reset (leave a level empty if none makes sense) and a false-positive guard: the sentence that stops a local blip being read as national failure.
 - Categories: 1 External, 2 Technology/data, 3 Assumptions/ToC, 4 Delivery, 5 Resources, 6 Mandate/legal, 7 Legitimacy, 8 Risks, 9 Evidence/adjacent, 10 Opportunity. Technology (2) is first-class.
-- Interrupts are red lines agreed in advance (a loss above a threshold, a platform dark for weeks, a mandate withdrawn). Cliffs are dated events: funding sunsets, legal deadlines, scheduled review windows.
+- Interrupts are red lines agreed in advance (a loss above a threshold, a platform dark for weeks, a mandate withdrawn). Give each the room whose question it answers: a coordinating body that stops sitting is 6, a platform dark is 2, funding withdrawn is 5, a loss above a threshold is 8. Cliffs are dated events: funding sunsets, legal deadlines, scheduled review windows; their kind places them.
 - Dates MUST be full YYYY-MM-DD (use 01 January / 31 December if the text only gives a year). Never a year alone.
 - Write "NO BASELINE" as current_value when the document names a system or indicator but never measures it.
 - assumption_indexes are 0-based indexes into assumptions.
