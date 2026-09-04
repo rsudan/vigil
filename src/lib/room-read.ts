@@ -18,9 +18,17 @@ import { rankChunks, tokenize } from "./server/retrieval.ts";
  *                    another language. Never report that as silence.
  */
 
-export type RoomPassage = { category: number; rank: number; locator: string; quote: string; terms_hit: number };
+export type RoomPassage = {
+  category: number;
+  rank: number;
+  locator: string;
+  quote: string;
+  terms_hit: number;
+  /** The document the sentence was quoted from, when several are stored. */
+  documentId: number | null;
+};
 export type RoomRead = { category: number; passages: RoomPassage[]; terms_matched: boolean };
-export type ReadChunk = { heading: string; body: string };
+export type ReadChunk = { heading: string; body: string; documentId?: number | null };
 
 /** At most this many passages per room. A room may never look full. */
 export const MAX_PASSAGES = 2;
@@ -112,7 +120,7 @@ export function locatorOf(heading: string): string {
   return (page ? page[0] : heading.slice(0, 80)).trim();
 }
 
-type Candidate = { quote: string; locator: string; hits: number; key: string };
+type Candidate = { quote: string; locator: string; hits: number; key: string; documentId: number | null };
 
 /** Read every room out of one document. Deterministic: the same text gives the same rows. */
 export function readRooms(chunks: ReadChunk[]): RoomRead[] {
@@ -137,7 +145,7 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
         for (const t of terms) if (words.has(t)) hits += 1;
         if (hits < MIN_TERMS) continue;
         seen.add(key);
-        found.push({ quote: sentence, locator: locatorOf(chunk.heading), hits, key });
+        found.push({ quote: sentence, locator: locatorOf(chunk.heading), hits, key, documentId: chunk.documentId ?? null });
       }
     }
     candidates.set(guide.id, found);
@@ -150,7 +158,14 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
       .filter((c) => (spread.get(c.key) ?? 0) <= MAX_ROOMS_PER_SENTENCE)
       .sort((a, b) => b.hits - a.hits || a.quote.length - b.quote.length);
     for (const c of found) {
-      passages.push({ category: guide.id, rank: passages.length, locator: c.locator, quote: c.quote, terms_hit: c.hits });
+      passages.push({
+        category: guide.id,
+        rank: passages.length,
+        locator: c.locator,
+        quote: c.quote,
+        terms_hit: c.hits,
+        documentId: c.documentId,
+      });
       if (passages.length >= MAX_PASSAGES) break;
     }
     return { category: guide.id, passages, terms_matched: matched.get(guide.id) ?? false };

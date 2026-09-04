@@ -4,8 +4,8 @@ import { MAX_PASSAGES, boilerplate, fold, locatorOf, readRooms, type ReadChunk }
 
 const MASTHEAD = "OFFICIAL GAZETTE OF THE REPUBLIC, PART I, No. 516 bis of June 3, 2024, printed by the state press.";
 
-function chunk(page: number, body: string): ReadChunk {
-  return { heading: `p. ${page} · ${MASTHEAD.slice(0, 40)}`, body: `${MASTHEAD} ${body}` };
+function chunk(page: number, body: string, documentId = 1): ReadChunk {
+  return { heading: `p. ${page} · ${MASTHEAD.slice(0, 40)}`, body: `${MASTHEAD} ${body}`, documentId };
 }
 
 /** A short document that talks about money and delivery and nothing else. */
@@ -138,6 +138,18 @@ describe("readRooms", () => {
     ];
     const mandate = readRooms(doc).find((r) => r.category === 6)!;
     assert.ok(mandate.passages.length >= 1, "ministries must meet the term ministry");
+  });
+
+  it("keeps the id of the document each sentence came from", () => {
+    const two = [
+      chunk(1, "The budget allocated to the ministry for youth programmes covers staff and infrastructure at the central level.", 7),
+      chunk(2, "The council keeps its mandate under the law and meets four times a year to approve the action plan.", 9),
+    ];
+    const rooms = readRooms(two);
+    const resources = rooms.find((r) => r.category === 5)!;
+    assert.equal(resources.passages[0]?.documentId, 7);
+    const mandate = rooms.find((r) => r.category === 6)!;
+    assert.equal(mandate.passages[0]?.documentId, 9);
   });
 
   it("is deterministic", () => {

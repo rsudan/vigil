@@ -46,21 +46,20 @@ export const readDocumentIntoRooms = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await assertAccess(context.userId, data.strategy_id, "editor", sql);
-    const docs = await sql<{ id: number }>`
-      select id from strategy_documents where strategy_id = ${data.strategy_id} order by id desc limit 1
-    `;
-    const documentId = docs[0]?.id;
-    if (!documentId) {
-      return { ok: false as const, error: "No document is stored for this strategy. Upload the strategy first." };
-    }
-    const chunks = await sql<{ heading: string; body: string }>`
-      select c.heading, c.body from document_chunks c
+    // Every passage keeps the id of the document it was quoted from, not of the
+    // newest one: a strategy can have several documents on file.
+    const chunks = await sql<{ heading: string; body: string; documentId: number }>`
+      select c.heading, c.body, d.id as "documentId" from document_chunks c
       join strategy_documents d on d.id = c.document_id
       where d.strategy_id = ${data.strategy_id}
       order by d.id, c.chunk_index
     `;
     if (!chunks.length) {
-      return { ok: false as const, error: "The stored document has no text to read." };
+      const any = await sql<{ id: number }>`select id from strategy_documents where strategy_id = ${data.strategy_id} limit 1`;
+      return {
+        ok: false as const,
+        error: any[0] ? "The stored document has no text to read." : "No document is stored for this strategy. Upload the strategy first.",
+      };
     }
     const reads = readRooms(chunks);
     await sql.transaction(async (tx) => {
@@ -68,9 +67,10 @@ export const readDocumentIntoRooms = createServerFn({ method: "POST" })
       await tx`delete from room_reads where strategy_id = ${data.strategy_id}`;
       for (const room of reads) {
         for (const p of room.passages) {
+          if (p.documentId == null) continue;
           await tx`
             insert into room_passages (strategy_id, document_id, category, rank, locator, quote, terms_hit)
-            values (${data.strategy_id}, ${documentId}, ${p.category}, ${p.rank}, ${p.locator}, ${p.quote}, ${p.terms_hit})
+            values (${data.strategy_id}, ${p.documentId}, ${p.category}, ${p.rank}, ${p.locator}, ${p.quote}, ${p.terms_hit})
           `;
         }
         await tx`
