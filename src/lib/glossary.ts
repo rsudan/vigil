@@ -1,31 +1,35 @@
 export const TERMS = {
   assumption: {
     title: "Load-bearing assumption",
-    body: "A bet the strategy is making that, if false, would change the document. Not an activity (“train 200 people”) and not a hope. Romania’s sample has 12 — the allowed range is 5 to 12, so every strategy can carry a full spine.",
+    body: "A bet the strategy is making that, if false, would change the document. Not an activity (“train 200 people”) and not a hope. Keep between 5 and 12 so the list stays a spine, not a catalogue.",
   },
   sentinel: {
     title: "Sentinel",
-    body: "A signal you watch every cycle, not just this quarter. Maximum eight. If it goes stale, you are pretending to monitor. DesInventar completeness and post-2027 funding are sentinels for Romania.",
+    body: "A signal you watch every cycle, not just this quarter. Maximum eight. If it goes stale, you are pretending to monitor.",
   },
   rotating: {
     title: "Rotating signal",
-    body: "A signal on the watchlist for this quarter only. Park or retire it to make room. Annex 1 output completion is rotating: it matters for delivery, not always for validity.",
+    body: "A signal on the watchlist for this quarter only. Park or retire it to make room. Output completion against the annex is usually rotating: it matters for delivery, not always for validity.",
   },
   interrupt: {
     title: "Interrupt",
-    body: "A red line that skips the calendar. If it fires, you review within 30 days — you do not wait for the annual report. A Vrancea-class earthquake is an interrupt.",
+    body: "A red line agreed in advance that skips the calendar. If it fires, you review within 30 days; you do not wait for the annual report. Close it once the decision is logged.",
   },
   cliff: {
     title: "Cliff",
-    body: "A dated event that will force a rewrite whether or not anyone calls a review. Romania’s 31 December 2027 PNRR/MFF sunset is a fiscal cliff.",
+    body: "A dated event that will force a rewrite whether or not anyone calls a review: a funding sunset, a legal deadline, a scheduled rewrite window.",
   },
   pressure: {
     title: "Pressure",
-    body: "A score from 1 to 125. It is materiality × velocity × (6 − confidence), each of those 1–5. 1 is the quietest possible watchpoint; 125 means it matters a lot, it can move fast, and you do not trust the current number. Read 1–15 as quiet, 16–39 moderate, 40–79 high, 80–125 severe.",
+    body: "A score from 1 to 125: materiality × velocity × (6 − confidence), each of those 1–5. It says how hard to watch a signal, not whether it has moved. Read 1–15 as quiet, 16–39 moderate, 40–79 high, 80–125 severe.",
+  },
+  crossed: {
+    title: "Crossed threshold",
+    body: "Each signal names the reading that would justify a watch, an amend, a refresh, or a reset. When a new reading crosses one, mark it. The queue then carries that intensity, not a guess.",
   },
   delivery: {
     title: "Delivery",
-    body: "Existing M&E: did we do the plan? Green / amber / red / unrated. This is the colour of Annex 1, not of the strategy’s logic.",
+    body: "Existing M&E: did we do the plan? Green / amber / red / unrated. This is the colour of the action plan, not of the strategy’s logic.",
   },
   validity: {
     title: "Validity",
@@ -41,7 +45,7 @@ export const TERMS = {
   },
   queue: {
     title: "Decision queue",
-    body: "At most 12 items the machine thinks you must decide now. Weakening assumptions, fired interrupts, stale sentinels, high-pressure sentinels, cliffs inside 180 days, and green delivery over a weakening logic. You log a decision — including “no change.” Silence is a failure.",
+    body: "At most 12 items, ranked by urgency: fired red lines, crossed thresholds, broken and weakening bets, cliffs inside 180 days, green delivery over a weakening logic, high-pressure and stale sentinels. Log a decision on each, including “no change”; the item then clears until its condition changes again.",
   },
   watch: {
     title: "Watch",

@@ -1,4 +1,4 @@
-import { CATEGORY_GUIDE } from "./category-guide";
+import { CATEGORY_GUIDE } from "./category-guide.ts";
 
 export const METHOD_TAGLINE = "Watch the conditions under which a strategy needs to change.";
 
@@ -14,7 +14,7 @@ export const METHOD_STEPS = [
   {
     n: "2",
     title: "Watch a few things hard",
-    body: "Each bet needs a way to know if it is still true. That watchpoint is a signal. You may run at most thirty active signals, of which eight are sentinels — always on, every cycle. The rest rotate. A thirty-first signal is refused until you retire one. The point is not coverage of every indicator in the annex. The point is that the eight things that would actually force a rewrite are never unwatched.",
+    body: "Each bet needs a way to know if it is still true. That watchpoint is a signal, and each signal names in advance the reading that would justify a watch, an amend, a refresh, or a reset. You may run at most thirty active signals, of which eight are sentinels — always on, every cycle. The rest rotate. A thirty-first signal is refused until you retire one. The point is not coverage of every indicator in the annex. The point is that the eight things that would actually force a rewrite are never unwatched.",
   },
   {
     n: "3",
@@ -29,7 +29,7 @@ export const METHOD_STEPS = [
   {
     n: "5",
     title: "Triage, then write the decision down",
-    body: "A sitting does not discuss sixty dots. It discusses a queue of at most twelve items the method has already selected: weakening bets, fired red lines, stale sentinels, cliffs inside six months. For each item you log a decision — including “no change.” Silence is not a decision. The log is the proof the document is living.",
+    body: "A sitting does not discuss sixty dots. It discusses a queue of at most twelve items the method has already ranked: fired red lines, crossed thresholds, weakening bets, cliffs inside six months, stale sentinels. For each item you log a decision — including “no change.” Silence is not a decision. The log is the proof the document is living, and a logged decision clears the item until its condition changes again.",
   },
 ] as const;
 
@@ -62,11 +62,12 @@ export const METHOD_INTENSITIES = [
 ] as const;
 
 export const METHOD_PRESSURE =
-  "Each signal is scored 1 to 5 on three things: how much it matters, how fast it can move, and how much you trust the current number. Pressure is (how much it matters) × (how fast it can move) × (6 − how much you trust it). The result always sits between 1 and 125. One is a quiet, well-known, low-stakes watch. 125 is the opposite: it matters, it can jump, and you do not trust the figure. As a reading guide: 1–15 quiet, 16–39 moderate, 40–79 high, 80–125 severe. A missing baseline raises pressure on purpose — it is a reason to look harder, not to look away.";
+  "Each signal is scored 1 to 5 on three things: how much it matters, how fast it can move, and how much you trust the current number. Pressure is (how much it matters) × (how fast it can move) × (6 − how much you trust it). The result always sits between 1 and 125. One is a quiet, well-known, low-stakes watch. 125 is the opposite: it matters, it can jump, and you do not trust the figure. As a reading guide: 1–15 quiet, 16–39 moderate, 40–79 high, 80–125 severe. A missing baseline raises pressure on purpose — it is a reason to look harder, not to look away. Pressure says how hard to watch; the thresholds say what a reading means once it arrives.";
 
 export const METHOD_CATEGORIES =
   "Every strategy is read through the same ten rooms — a digital plan, a climate plan, or a disaster plan. You do not need a watchpoint for every line in an annex. You do need to know if a room is empty. An empty room is a blind spot, not a calm one. The Categories screen shows the analysis for each room on the document you have loaded.";
 
+/** Full method, with the worked examples. Shown on the landing page. */
 export function methodologyMarkdown() {
   const lines = [
     "## Methodology",
@@ -99,8 +100,18 @@ export function methodologyMarkdown() {
     lines.push("");
     lines.push(`What to look for: ${c.looksFor}`);
     lines.push("");
-    lines.push(`Example: ${c.example}`);
-    lines.push("");
   }
+  return lines.join("\n");
+}
+
+/** Short reading guide for exported documents: the method, no worked examples. */
+export function methodSummaryMarkdown() {
+  const lines = ["## How to read this document", "", METHOD_TAGLINE, ""];
+  for (const step of METHOD_STEPS) lines.push(`- **${step.title}.** ${step.body}`);
+  lines.push("");
+  lines.push("Intensities: " + METHOD_INTENSITIES.map((i) => `**${i.title}** (${i.body.split(".")[0]!.toLowerCase()})`).join("; ") + ".");
+  lines.push("");
+  lines.push(METHOD_PRESSURE);
+  lines.push("");
   return lines.join("\n");
 }

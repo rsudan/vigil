@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 import { listMembers, setMemberRole } from "@/lib/server/profiles";
-import { deleteOrgKey, listOrgKeys, saveOrgKey, setOrgKeyGrants } from "@/lib/server/keys";
+import { deleteOrgKey, listOrgKeys, platformKeyPolicy, saveOrgKey, setOrgKeyGrants } from "@/lib/server/keys";
 import { PROVIDERS, type ProviderId } from "@/lib/taxonomy";
 import { Button } from "./ui/button";
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -13,6 +13,7 @@ export function AdminPanel() {
   const qc = useQueryClient();
   const members = useQuery({ queryKey: ["members"], queryFn: () => listMembers() });
   const orgKeys = useQuery({ queryKey: ["org-keys"], queryFn: () => listOrgKeys() });
+  const policy = useQuery({ queryKey: ["platform-policy"], queryFn: () => platformKeyPolicy() });
   const [draft, setDraft] = useState<Record<ProviderId, string>>(
     () => Object.fromEntries(PROVIDERS.map((p) => [p.id, ""])) as Record<ProviderId, string>,
   );
@@ -42,8 +43,15 @@ export function AdminPanel() {
         <h1 className="font-serif text-3xl">Administrator</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Persist organisation keys and grant them to named users. Everyone else brings their own.
-          The first account on this instance is administrator.
+          The first account on this instance is administrator. Organisation keys are encrypted at rest.
         </p>
+        {policy.data ? (
+          <p className="mt-2 max-w-2xl text-xs text-muted-foreground">
+            Environment keys ({policy.data.configured.length ? policy.data.configured.join(", ") : "none set"}) follow
+            VIGIL_PLATFORM_KEYS_FOR: currently “{policy.data.policy}”. Set it to “all” to let every member spend them,
+            “none” to switch them off. Set VITE_DISABLE_SIGNUP=true once the team is on board to stop new accounts.
+          </p>
+        ) : null}
       </div>
 
       <section className="space-y-3">

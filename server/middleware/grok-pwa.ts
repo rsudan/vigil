@@ -14,8 +14,17 @@
  *   This must be a middleware transforming `next()`: h3 discards the `response`
  *   runtime hook's return value, and `render:html` does not exist in Nitro v3.
  */
-import installPageTemplate from "../../scripts/install-page.html?raw";
 import { grokOgIdentity } from "virtual:grok-og-identity";
+
+// The Home Screen tutorial template ships with the Grok app-builder workspace,
+// not with this repository. Glob it so a checkout without the file still
+// builds; the install page then simply falls through to the app.
+const installPages = import.meta.glob("../../scripts/install-page.html", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const installPageTemplate: string = Object.values(installPages)[0] ?? "";
 import {
   acceptsHtml,
   createHeadInjector,
@@ -80,6 +89,7 @@ export default async function grokPwaMiddleware(
   }
 
   if (
+    installPageTemplate &&
     isInstallQuery(urlWithQuery) &&
     isDocumentPath(path) &&
     acceptsHtml(event.req.headers.get("accept"))

@@ -11,12 +11,16 @@ const databaseUrl =
   rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
 
 /**
- * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
- * sandbox), otherwise a local embedded **PGLite** (Postgres compiled to WASM) so
- * the app has a working database even with nothing configured — the live preview
- * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
+ * Active backend: real Postgres when `DATABASE_URL` is set (deployed /
+ * configured), otherwise a local embedded **PGLite** (Postgres compiled to WASM)
+ * persisted under `.pglite/` (override with `PGLITE_DATA_DIR`; `memory://` keeps
+ * it in memory, which resets on every restart).
  */
 export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+
+/** Where the embedded database lives when no `DATABASE_URL` is set. */
+export const pgliteDataDir: string =
+  (typeof process !== "undefined" && process.env.PGLITE_DATA_DIR?.trim()) || ".pglite";
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -25,6 +29,7 @@ export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
  *   const sql = await getSql();
  *   const rows = await sql`select * from todos where id = ${id}`; // parameterized
  *   const rows2 = await sql.query("select * from todos where id = $1", [id]);
+ *   await sql.transaction(async (tx) => { await tx`insert …`; await tx`insert …`; });
  */
 export interface Sql {
   <T = Record<string, unknown>>(
@@ -35,6 +40,8 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  /** Run `fn` in one transaction. Inside a transaction, nested calls reuse it. */
+  transaction<T>(fn: (tx: Sql) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -68,9 +75,10 @@ const OID_INTERVAL = 1186;
 const identity = (v: string) => v;
 
 type Run = <T>(text: string, params: unknown[]) => Promise<T[]>;
+type TxRunner = <T>(fn: (tx: Sql) => Promise<T>) => Promise<T>;
 
-/** Wrap a query runner in the tagged-template + `.query()` `Sql` surface. */
-function toSql(run: Run): Sql {
+/** Wrap a query runner in the tagged-template + `.query()` + `.transaction()` `Sql` surface. */
+function toSql(run: Run, transaction?: TxRunner): Sql {
   const sql = (async <T = Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...values: unknown[]
@@ -82,6 +90,8 @@ function toSql(run: Run): Sql {
   }) as unknown as Sql;
   sql.query = <T = Record<string, unknown>>(text: string, params: unknown[] = []) =>
     run<T>(text, params);
+  // Inside a transaction there is no nesting: the callback simply runs on the same connection.
+  sql.transaction = transaction ?? (<T>(fn: (tx: Sql) => Promise<T>) => fn(sql));
   return sql;
 }
 
@@ -94,10 +104,32 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
+    const transaction: TxRunner = async (fn) => {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const tx = toSql(async <T>(text: string, params: unknown[]) => {
+          const res = await client.query(text, params);
+          return res.rows as T[];
+        });
+        const out = await fn(tx);
+        await client.query("COMMIT");
+        return out;
+      } catch (err) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          // The connection died; the original error is the one worth reporting.
+        }
+        throw err;
+      } finally {
+        client.release();
+      }
+    };
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
-    });
+    }, transaction);
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
     throw err;
@@ -107,11 +139,12 @@ function createNeonSql(): Promise<Sql> {
 
 async function createPgliteSql(): Promise<Sql> {
   // Embedded Postgres, imported on demand so it never loads on the Neon path.
-  // One in-memory instance per process, shared across HMR module instances, so
-  // data survives source edits (it resets on dev-server restart).
+  // One instance per process, shared across HMR module instances. Persisted to
+  // `pgliteDataDir` so strategies survive a restart.
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
     const pg = new PGlite({
+      dataDir: pgliteDataDir,
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,
@@ -129,7 +162,6 @@ async function createPgliteSql(): Promise<Sql> {
   });
   const pg = await globalRef.__pgliteInstance__;
 
-  // 0004_research.sql: document amendments and peer-strategy research.
   // SQL is inlined by the bundler via import.meta.glob (no runtime fs); applied
   // files are tracked in _migrations. The glob does not descend, so the opt-in
   // auth schema under migrations/auth/ stays out. Runs once per module instance
@@ -161,10 +193,19 @@ async function createPgliteSql(): Promise<Sql> {
   globalRef.__pgliteMigrateChain__ = pass;
   await pass;
 
+  const transaction: TxRunner = (fn) =>
+    pg.transaction(async (tx) =>
+      fn(
+        toSql(async <T>(text: string, params: unknown[]) => {
+          const result = await tx.query<T>(text, params);
+          return result.rows;
+        }),
+      ),
+    );
   return toSql(async <T>(text: string, params: unknown[]) => {
     const result = await pg.query<T>(text, params);
     return result.rows;
-  });
+  }, transaction);
 }
 
 let sqlPromise: Promise<Sql> | null = null;
@@ -185,7 +226,6 @@ async function createSql(): Promise<Sql> {
  *
  * Schema comes from `migrations/*.sql`, auto-applied before the first query on
  * both backends — define tables there, never inline in server functions.
- * Vigil app tables live in 0002_vigil.sql.
  */
 export function getSql(): Promise<Sql> {
   sqlPromise ??= createSql().catch((err) => {
@@ -196,8 +236,8 @@ export function getSql(): Promise<Sql> {
 }
 
 /**
- * The shared PGLite instance (preview only), with `migrations/*.sql` applied.
- * Lets Better Auth persist to the SAME embedded DB as app data in preview (via a
+ * The shared PGLite instance (no `DATABASE_URL`), with `migrations/*.sql`
+ * applied. Lets Better Auth persist to the SAME embedded DB as app data (via a
  * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses Neon).
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {
@@ -213,7 +253,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
 /**
  * Finish DB bootstrap before the server handles traffic.
  *
- * - **PGLite** (preview / no `DATABASE_URL`): open the in-memory DB and apply
+ * - **PGLite** (no `DATABASE_URL`): open the embedded DB and apply
  *   `migrations/*.sql`. Idempotent — concurrent callers share one promise.
  * - **Neon**: no-op (pool is created lazily on first query).
  *
