@@ -519,7 +519,7 @@ async function main() {
     assert(/From the document \(verbatim, found by lexical search\):/.test(analysis), "analysis lacks the document passages");
     assert(/- p\. \d+[^:]*: "/.test(analysis), "analysis passages carry no page locator");
     assert(analysis.includes("From the document: silent on this room."), "analysis never reports a silent room");
-    assert(analysis.includes("From the world (proposed, cites a returned source):"), "analysis lacks the room search results");
+    assert(analysis.includes("From the world (each cites a source the search returned):"), "analysis lacks the room search results");
     assert(/^Jurisdiction: /m.test(analysis), "analysis lacks the jurisdiction");
     assert(brief.includes("## Proposed changes to the original document"), "brief lacks amendments");
     if (!REAL) assert(brief.includes("not found in the stored text"), "brief does not flag the unverified quote");

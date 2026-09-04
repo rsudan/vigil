@@ -55,13 +55,13 @@ function DocumentSection({ room, gap }: { room: CategoryResult; gap: boolean }) 
           </p>
         ) : !room.read.terms_matched ? (
           <p className="text-sm text-muted-foreground">
-            None of this room’s words appear anywhere in the stored text, so the search itself failed rather than the
-            document being silent. This usually means the stored document is in another language than the room’s
-            terms.
+            Too few of this room’s words appear anywhere in the stored text for a search to mean anything, so the
+            search failed rather than the document being silent. This usually means the stored document is in another
+            language than the room’s terms.
           </p>
         ) : !room.passages.length ? (
           <p className="text-sm text-muted-foreground">
-            The document is silent on this room. That is a finding: read {room.id} as a room the strategy never
+            The document is silent on this room. That is a finding: read {room.short} as a room the strategy never
             addressed, not as one that is calm.
           </p>
         ) : (
@@ -109,7 +109,10 @@ function WorldSection({
         return;
       }
       toast.success(
-        `${res.found} candidate${res.found === 1 ? "" : "s"} from ${res.sources} sources${res.dropped ? `, ${res.dropped} dropped for citing no source` : ""}`,
+        `${res.found} candidate${res.found === 1 ? "" : "s"} from ${res.sources} sources` +
+          (res.dropped ? `, ${res.dropped} dropped for citing no source` : "") +
+          (res.beyond ? `, ${res.beyond} beyond the three this room keeps` : "") +
+          (res.unverified ? `, ${res.unverified} with a quotation not found in the source` : ""),
       );
       onChanged();
     },
@@ -121,21 +124,31 @@ function WorldSection({
     onSuccess: onChanged,
     onError,
   });
-  const latest = room.findings[0]?.searched_at ?? null;
+  const all = [...room.findings, ...room.dismissed];
+  const searched = all.length > 0;
+  const latest = all.map((f) => f.searched_at).sort()[all.length - 1] ?? null;
+  const summary = !searched
+    ? "From the world — not searched yet"
+    : room.findings.length
+      ? `From the world (${room.findings.length})`
+      : "From the world — searched, nothing kept";
   return (
     <details open={gap} className="rounded-md border border-border p-3">
       <summary className="cursor-pointer text-xs uppercase tracking-wider text-muted-foreground">
-        {room.findings.length ? `From the world (${room.findings.length})` : "From the world — not searched yet"}
+        {summary}
       </summary>
       <div className="mt-3 space-y-3">
         <p className="text-xs text-muted-foreground">
-          One search and one reading of the results, on your own keys, only when you ask. Every candidate must quote a
-          source the search returned. Nothing here changes this room’s colour: to act on one, make it a watchpoint.
+          One search and one reading of the results, on your own keys, only when you ask. Every candidate must cite a
+          source the search returned, and its quotation is checked against that source. Nothing here changes this
+          room’s colour: to act on one, make it a watchpoint.
         </p>
         {room.findings.map((f) => (
           <div key={f.id} className="rounded-md border border-border p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={f.status === "kept" ? "holding" : "neutral"}>{f.status}</Badge>
+              {f.quote_verified === true ? <Badge tone="holding">quote verified</Badge> : null}
+              {f.quote_verified === false ? <Badge tone="broken">quote not found in the source</Badge> : null}
               {f.published_date ? <span className="font-mono text-xs text-muted-foreground">{f.published_date}</span> : null}
             </div>
             <p className="mt-2 text-sm font-medium">{f.title}</p>
@@ -158,16 +171,31 @@ function WorldSection({
             ) : null}
             {f.status === "kept" ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Kept {day(f.decided_at)}. It is not a watchpoint until you add one on the Signals tab.
+                Kept {day(f.decided_at)}
+                {f.decided_author ? ` by ${f.decided_author}` : ""}. It is not a watchpoint until you add one on the
+                Signals tab.
               </p>
             ) : null}
           </div>
         ))}
         {room.dismissed.length ? (
-          <p className="text-xs text-muted-foreground">
-            {room.dismissed.length} candidate{room.dismissed.length === 1 ? "" : "s"} dismissed here and kept in the
-            record.
-          </p>
+          <details className="rounded-md border border-border p-3">
+            <summary className="cursor-pointer text-xs uppercase tracking-wider text-muted-foreground">
+              {room.dismissed.length} dismissed here, kept in the record
+            </summary>
+            <ul className="mt-2 space-y-2">
+              {room.dismissed.map((f) => (
+                <li key={f.id} className="text-sm">
+                  {f.title}
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">
+                    dismissed {day(f.decided_at)}
+                    {f.decided_author ? ` by ${f.decided_author}` : ""}
+                  </span>
+                  {f.rationale ? <p className="text-xs text-muted-foreground">{f.rationale}</p> : null}
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
         {editable ? (
           <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">

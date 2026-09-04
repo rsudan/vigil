@@ -9,6 +9,7 @@ import { parseJsonObject } from "@/lib/server/json";
 import { resolveKey, resolveLlm } from "@/lib/server/keys";
 import { chatComplete } from "@/lib/server/llm";
 import { assertRateLimit } from "@/lib/server/rate-limit";
+import { excerptFound, isSilenceMarker } from "@/lib/server/retrieval";
 import { rooms as schema, validate } from "@/lib/server/schemas";
 import type { Strategy } from "@/lib/types";
 
@@ -172,7 +173,7 @@ Return ONLY JSON:
     "title": "the source's title",
     "published_date": "YYYY-MM-DD or the year, or empty if the source gives none",
     "quote": "a sentence copied verbatim from that source's text",
-    "why": "one or two sentences: what this means for THIS strategy's room, naming what would have to change"
+    "why": "one or two sentences: what this bears on in this room, and which part of the strategy it touches. Do not say what should change."
   }]
 }
 
@@ -203,7 +204,7 @@ ${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.publishedDate ?? "date unkno
 
     const byUrl = new Map(sources.map((s) => [normalizeUrl(s.url), s]));
     const raw = Array.isArray(parsed.findings) ? parsed.findings.slice(0, 6) : [];
-    const kept: { title: string; url: string; published: string; quote: string; why: string }[] = [];
+    const kept: { title: string; url: string; published: string; quote: string; verified: boolean | null; why: string }[] = [];
     let dropped = 0;
     for (const item of raw) {
       const f = item as Record<string, unknown>;
@@ -214,11 +215,17 @@ ${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.publishedDate ?? "date unkno
         dropped += 1;
         continue;
       }
+      const quote = clip(f.quote, 700);
       kept.push({
         title: clip(f.title, 240) || matched.title,
         url: matched.url,
-        published: clip(f.published_date, 40) || (matched.publishedDate ?? ""),
-        quote: clip(f.quote, 700),
+        // The search knows the real publication date; the model's is a claim.
+        published: (matched.publishedDate ?? "") || clip(f.published_date, 40),
+        quote,
+        // Checked against the text the search returned, so a sentence the model
+        // invented and hung on a real URL is flagged rather than displayed as a
+        // quotation.
+        verified: isSilenceMarker(quote) ? null : excerptFound(quote, matched.text),
         why: clip(f.why, 700),
       });
     }
@@ -228,19 +235,30 @@ ${sources.map((s, i) => `[${i + 1}] ${s.title} (${s.publishedDate ?? "date unkno
         error: `Nothing came back for this room that cites a returned source${dropped ? ` (${dropped} dropped)` : ""}.`,
       };
     }
+    // Only the first three are kept: a room may never look full.
+    const shown = kept.slice(0, 3);
+    const beyond = kept.length - shown.length;
     await sql.transaction(async (tx) => {
-      for (const f of kept.slice(0, 3)) {
+      for (const f of shown) {
         await tx`
-          insert into room_findings (strategy_id, user_id, category, title, url, published_date, quote, why, query)
+          insert into room_findings (strategy_id, user_id, category, title, url, published_date, quote, quote_verified, why, query)
           values (
             ${data.strategy_id}, ${context.userId}, ${data.category}, ${f.title}, ${f.url},
-            ${f.published}, ${f.quote}, ${f.why}, ${query}
+            ${f.published}, ${f.quote}, ${f.verified}, ${f.why}, ${query}
           )
         `;
       }
       await tx`update strategies set updated_at = now() where id = ${data.strategy_id}`;
     });
-    return { ok: true as const, found: Math.min(kept.length, 3), sources: sources.length, dropped, query };
+    return {
+      ok: true as const,
+      found: shown.length,
+      sources: sources.length,
+      dropped,
+      beyond,
+      unverified: shown.filter((f) => f.verified === false).length,
+      query,
+    };
   });
 
 /** Keep or dismiss one candidate. Dated, attributed, and never deleted. */

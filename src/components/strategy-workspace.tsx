@@ -475,9 +475,9 @@ function CategoriesView({
         </ul>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>What the document says</strong> — verbatim sentences from the strategy you uploaded, with the
-            page they sit on, found by lexical search with no model and no key. A room the document never addresses
-            says so, and that is a finding.
+            <strong>What the document says</strong> — verbatim sentences from the strategy you uploaded, with where
+            they sit in it: the page, when the document has pages. Found by lexical search, with no model and no key.
+            A room the document never addresses says so, and that is a finding.
           </li>
           <li>
             <strong>From the world</strong> — what a search found about this room since a date you choose. It runs

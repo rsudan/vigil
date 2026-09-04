@@ -13,9 +13,11 @@ import { rankChunks, tokenize } from "./server/retrieval.ts";
  * Three outcomes, and they mean different things:
  *   passages         the document speaks here.
  *   silent           we searched the document and it does not.
- *   terms unmatched  the room's terms appear nowhere in this text, so the
- *                    search itself failed, usually because the document is in
- *                    another language. Never report that as silence.
+ *   terms unmatched  the ten rooms' vocabulary barely appears in this text at
+ *                    all, so the search failed rather than the document being
+ *                    quiet. That is a fact about the document, usually its
+ *                    language, so it is decided once for the whole document and
+ *                    never inferred from one room's silence.
  */
 
 export type RoomPassage = {
@@ -34,6 +36,14 @@ export type ReadChunk = { heading: string; body: string; documentId?: number | n
 export const MAX_PASSAGES = 2;
 /** A sentence must carry this many distinct room terms to be worth quoting. */
 export const MIN_TERMS = 2;
+/**
+ * The share of the ten rooms' whole vocabulary that must appear somewhere in the
+ * document before any room may be called silent. This is a judgment about the
+ * document, not about one room: an English strategy with nothing to say about
+ * hazards is silent on that room, while a Romanian document fails every room at
+ * once because the terms are in the wrong language.
+ */
+export const MIN_VOCABULARY_SHARE = 0.15;
 /**
  * A sentence that answers more rooms than this answers none of them. The guard
  * belongs at the sentence, not the chunk: a well-written chapter legitimately
@@ -127,13 +137,18 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
   const junk = boilerplate(chunks);
   const corpus = new Set(chunks.flatMap((c) => tokenize(`${c.heading} ${c.body}`)).map(fold));
 
+  // Does the rooms' vocabulary fit this text at all? Decided over all ten rooms
+  // together, so one quiet room is never mistaken for a failed search.
+  const vocabulary = new Set(CATEGORY_GUIDE.flatMap((g) => tokenize(g.terms).map(fold)));
+  const present = [...vocabulary].filter((t) => corpus.has(t)).length;
+  const fits = vocabulary.size > 0 && present / vocabulary.size >= MIN_VOCABULARY_SHARE;
+
   // Candidate sentences per room, before anything is chosen.
   const candidates = new Map<number, Candidate[]>();
   const matched = new Map<number, boolean>();
   const spread = new Map<string, number>();
   for (const guide of CATEGORY_GUIDE) {
     const terms = new Set(tokenize(guide.terms).map(fold));
-    matched.set(guide.id, [...terms].some((t) => corpus.has(t)));
     const found: Candidate[] = [];
     const seen = new Set<string>();
     for (const chunk of rankChunks(chunks, [guide.terms.split(" ").flatMap(variants).join(" ")], CHUNKS_PER_ROOM)) {
@@ -149,6 +164,8 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
       }
     }
     candidates.set(guide.id, found);
+    // Finding something to quote is itself proof the search reached the text.
+    matched.set(guide.id, fits || found.length > 0);
     for (const key of seen) spread.set(key, (spread.get(key) ?? 0) + 1);
   }
 

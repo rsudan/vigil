@@ -66,7 +66,7 @@ On Categories he then asked for more than membership: "These categories should b
 - `CELL_READINGS` in `src/lib/glossary.ts` need his sign-off.
 - `strategies.jurisdiction` is new and only extraction and Settings fill it. Strategies created before 0009 have none, and a room refuses to search the world until it is set. His youth strategy needs it typed in, or a re-extraction.
 - The per-room search has never run against a real Exa key or a real model; the offline mock proves the grounding rule and the query-per-room, not the quality of live results.
-- `CATEGORY_GUIDE[].terms` are hand-written and English. A document stored in another language reports "this room's words do not match this text" rather than silence, which is honest but not useful; the terms would have to be translated per strategy.
+- `CATEGORY_GUIDE[].terms` are hand-written and English. A document stored in another language reports "too few of this room's words appear in this text" rather than silence, which is honest but not useful; the terms would have to be translated per strategy. Note that `strategies.language` describes the official instrument, not the stored text — his own upload is an English translation of a Romanian instrument — so the terms must never be chosen from that field.
 - Scheduled alerts do not exist; the portfolio computes attention on open. Needs a scheduler and a mail provider.
 - The real-key gauntlet has never been run; a live model's JSON discipline and quotation fidelity are unverified.
 - Large PDFs travel to and from the client as JSON (12 MB cap); a 4.5 MB request limit on Vercel would bite on very long text-heavy documents.

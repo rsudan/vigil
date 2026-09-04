@@ -192,11 +192,13 @@ export async function loadBundle(
     order by category
   `;
   const room_findings = await sql<RoomFinding>`
-    select f.id, f.category, f.title, f.url, f.published_date, f.quote, f.why, f.query,
+    select f.id, f.category, f.title, f.url, f.published_date, f.quote, f.quote_verified, f.why, f.query,
            f.searched_at::text as searched_at, f.status, f.decided_at::text as decided_at, f.rationale,
-           coalesce(p.display_name, p.email) as author
+           coalesce(p.display_name, p.email) as author,
+           coalesce(d.display_name, d.email) as decided_author
     from room_findings f
     left join profiles p on p.user_id = f.user_id
+    left join profiles d on d.user_id = f.decided_by
     where f.strategy_id = ${strategyId}
     order by f.category, f.searched_at desc, f.id desc
   `;

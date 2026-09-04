@@ -288,13 +288,18 @@ export type RoomFinding = {
   url: string;
   published_date: string;
   quote: string;
+  /** true = the quotation was found in the text the search returned; false = not found; null = nothing to check. */
+  quote_verified: boolean | null;
   why: string;
   query: string;
   searched_at: string;
   status: "proposed" | "kept" | "dismissed";
   decided_at: string | null;
   rationale: string;
+  /** Who ran the search. */
   author: string | null;
+  /** Who kept or dismissed it. */
+  decided_author: string | null;
 };
 
 export type StrategyDocument = {

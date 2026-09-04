@@ -24,9 +24,11 @@ function moneyDoc(): ReadChunk[] {
       "Absorption of external co-financing has been slow, and the expenditure recorded against the allocation for the period was far below the sum budgeted for it.",
     ),
     chunk(4, "Young people in rural areas report the least access to the services the plan promises to deliver to them."),
-    // One room-8 word and no second one: enough to prove the terms reach this
-    // text, not enough to be worth quoting about risk.
+    // Three of room 8's words, spread so no single sentence carries two: enough
+    // to prove the room's vocabulary reaches this text, not enough to quote.
     chunk(5, "A risk register for the youth sector will be published alongside the annual report of the ministry each year."),
+    chunk(6, "Any incident affecting the delivery of services will be reported to the ministry within five working days."),
+    chunk(7, "The threshold for reporting to the council is set out in the annual guidance issued to every county office."),
   ];
 }
 
@@ -71,7 +73,7 @@ describe("readRooms", () => {
   it("says nothing rather than reaching, when the document is silent on a room", () => {
     const risks = readRooms(moneyDoc()).find((r) => r.category === 8)!;
     assert.equal(risks.passages.length, 0, "no loss, threshold or damage language in this document");
-    assert.equal(risks.terms_matched, true, "the terms do occur in the corpus, so this is silence, not a failed search");
+    assert.equal(risks.terms_matched, true, "three of the room's words occur, so this is silence, not a failed search");
   });
 
   it("separates a failed search from a silent document", () => {

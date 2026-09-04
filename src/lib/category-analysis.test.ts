@@ -318,6 +318,7 @@ describe("what the document says, and what the world says", () => {
     url: "https://example.org/circular",
     published_date: "2026-06-01",
     quote: "The youth envelope is not carried into the next programming period.",
+    quote_verified: true,
     why: "The successor envelope this strategy assumes is not named.",
     query: "q",
     searched_at: iso(-2),
@@ -325,6 +326,7 @@ describe("what the document says, and what the world says", () => {
     decided_at: null,
     rationale: "",
     author: "Ana",
+    decided_author: null,
   });
 
   it("never changes a verdict, a headline or a pressure, however much material is loaded", () => {
