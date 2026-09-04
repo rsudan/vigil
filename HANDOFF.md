@@ -21,8 +21,8 @@ Owner: Randeep Sudan (rsudan@gmail.com, GitHub `rsudan`). He is the method's aut
 
 ```bash
 npm run dev                      # http://localhost:8080; first account is administrator; data persists in .pglite/
-npm test                         # 89 unit tests (queue, validity, rooms, extraction windows, retrieval, crypto, rate limits)
-npm run gauntlet                 # end to end in a real browser on a fresh database with the mock: 29 steps
+npm test                         # 107 unit tests (queue, validity, rooms, reading the document, extraction windows, retrieval, crypto, rate limits)
+npm run gauntlet                 # end to end in a real browser on a fresh database with the mock: 31 steps
 npm run gauntlet -- --real       # same against real keys (XAI_API_KEY etc., EXA_API_KEY, JINA_API_KEY); costs money
 npx tsc --noEmit && npx eslint . # both must be clean
 npm run build                    # production build must pass
@@ -35,6 +35,8 @@ Settings are documented in `.env.example`: `VIGIL_KEY_SECRET`, `VIGIL_PLATFORM_K
 ## Code map
 
 - `src/lib/compute.ts`: `buildQueue` (ranked, decision-aware), `buildMetrics`, `validityOf`, `cellReading`, `thresholdText`, `daysUntil` (calendar days, shared with the rooms). Pure, unit-tested.
+- `src/lib/room-read.ts`: reading the uploaded document into the ten rooms. Pure and modelless: lexical search over stored chunks, then a sentence is kept only if it carries two of that room's `terms` (in `category-guide.ts`), folded so "ministries" meets "ministry". Returns a verbatim sentence and its page. Distinguishes silent (searched, absent) from terms-unmatched (the search itself failed, usually another language).
+- `src/lib/server/rooms.ts`: `readDocumentIntoRooms` (free, no key), `searchRoom` (one Exa call and one model call per room, only on a click, grounded like `researchPeers`), `decideRoomFinding`.
 - `src/lib/category-analysis.ts`: the ten rooms. What sits in a room (watchpoints by their own room; bets only through a home watchpoint; red lines by `interrupts.category`, Risks when unset; cliffs by kind), the verdict, and a reading that names the strongest fact ranked as `RANK` in compute.ts ranks it. `src/lib/day.ts` is the one calendar-day helper for every screen and export.
 - `src/lib/glossary.ts`: all user-facing terms, `RAG_HELP` with `deliveryWord()`, `VALIDITY_HELP`, `CELL_READINGS` (the nine cell sentences, in Randeep's voice, not yet signed off by him).
 - `src/lib/server/strategies.ts`: `loadBundle`, every register mutation, `assessStrategy`, `applyAssumptionStatus` (the one rule for moving a bet: a status change needs ten characters of evidence), sharing.
@@ -44,7 +46,7 @@ Settings are documented in `.env.example`: `VIGIL_KEY_SECRET`, `VIGIL_PLATFORM_K
 - `src/lib/server/keys.ts`, `crypto.ts`, `rate-limit.ts`, `access.ts`, `schemas.ts`: keys encrypted at rest, per-user rate limits, roles, zod on every input.
 - `src/components/strategy-workspace.tsx`: the workspace shell, Overview, Categories, boards, log. `src/components/workspace/*`: assessment card and dialog, assumption and signal drawers and forms, queue, review, peers, team, settings.
 - `scripts/gauntlet/run.mjs` and `fixture-pdf.mjs`: the end-to-end runner and the synthetic 41-page strategy.
-- `migrations/0001`–`0008`: applied automatically by PGLite; `0008_rooms.sql` is the latest (a nullable room on red lines).
+- `migrations/0001`–`0009`: applied automatically by PGLite; `0009_room_evidence.sql` is the latest (`strategies.jurisdiction`, `room_passages`, `room_reads`, `room_findings`).
 
 ## Working conventions that have held
 
@@ -57,12 +59,14 @@ Settings are documented in `.env.example`: `VIGIL_KEY_SECRET`, `VIGIL_PLATFORM_K
 
 Reviewed with Randeep and reworked: **Overview** (collapsible terms, plain totals, Assessment card and dialog); **Categories** (rooms hold red lines and cliffs, bets sit only through their home watchpoints, a room can no longer read calm over a fired red line or a passed cliff). Not yet reviewed by him: Assumptions, Signals, Queue, Log, Review, Peers, Team, the Strategies portfolio, Keys, Admin, Login. He tested with a Romanian youth strategy he uploaded himself.
 
-On Categories he asked for more than membership: "These categories should be populated based on the strategy uploaded or under review coupled with web search." That is the next change, not this one — today a room shows only the register, and nothing web-derived reaches a room (peer findings carry a room number but render only on the Peers tab).
+On Categories he then asked for more than membership: "These categories should be populated based on the strategy uploaded or under review coupled with web search." That is now built. A room shows three things, and only the first can colour it: the register; what the uploaded document says here (verbatim sentences with page numbers, found by lexical search, no model, no key); and what a search found about this room since a date the user picks (one Exa call and one model call, only on a click). A test asserts every room's verdict, headline, pressure and second sentence are byte-identical with and without that material loaded.
 
 ## Open items
 
 - `CELL_READINGS` in `src/lib/glossary.ts` need his sign-off.
-- Rooms are filled from the register only: no per-room reading of the document, and no web search per room. See the note under "State of the screens".
+- `strategies.jurisdiction` is new and only extraction and Settings fill it. Strategies created before 0009 have none, and a room refuses to search the world until it is set. His youth strategy needs it typed in, or a re-extraction.
+- The per-room search has never run against a real Exa key or a real model; the offline mock proves the grounding rule and the query-per-room, not the quality of live results.
+- `CATEGORY_GUIDE[].terms` are hand-written and English. A document stored in another language reports "this room's words do not match this text" rather than silence, which is honest but not useful; the terms would have to be translated per strategy.
 - Scheduled alerts do not exist; the portfolio computes attention on open. Needs a scheduler and a mail provider.
 - The real-key gauntlet has never been run; a live model's JSON discipline and quotation fidelity are unverified.
 - Large PDFs travel to and from the client as JSON (12 MB cap); a 4.5 MB request limit on Vercel would bite on very long text-heavy documents.

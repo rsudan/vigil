@@ -4,6 +4,7 @@ import { ArrowLeft, Settings2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getStrategyBundle, logDecision } from "@/lib/server/strategies";
+import { readDocumentIntoRooms } from "@/lib/server/rooms";
 import {
   ROOM_REVIEW_DAYS,
   analyzeAllCategories,
@@ -25,6 +26,7 @@ import { Card, CardBody, CardDescription, CardHeader, CardTitle } from "./ui/car
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
 import { AssumptionDetail, NewAssumptionForm } from "./workspace/assumption-detail";
+import { RoomEvidence } from "./workspace/room-evidence";
 import { PeersView } from "./workspace/peers-view";
 import { QueueView } from "./workspace/queue-view";
 import { ReviewView } from "./workspace/review-view";
@@ -448,8 +450,9 @@ function CategoriesView({
     <div className="space-y-6">
       <PageGuide title="What this screen is">
         <p>
-          Every strategy is read through the same ten rooms. This page fills each room with what this document is
-          watching, betting on and has agreed to reopen on — and shows where it is watching nothing.
+          Every strategy is read through the same ten rooms. This page fills each room from three places: the
+          register (what this document is watching, betting on and has agreed to reopen on), the uploaded strategy
+          itself, and the world outside.
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
@@ -470,6 +473,22 @@ function CategoriesView({
             scenario in Risks.
           </li>
         </ul>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>What the document says</strong> — verbatim sentences from the strategy you uploaded, with the
+            page they sit on, found by lexical search with no model and no key. A room the document never addresses
+            says so, and that is a finding.
+          </li>
+          <li>
+            <strong>From the world</strong> — what a search found about this room since a date you choose. It runs
+            only when you ask, on your own keys, and every candidate must quote a source the search returned.
+          </li>
+        </ul>
+        <p>
+          Neither of those changes a room’s colour, its pressure or the queue. The document was already true the day
+          it was signed, and a search result is dated but was never agreed in advance. The only way either becomes a
+          colour is you turning it into a watchpoint or a red line.
+        </p>
         <p>
           A room’s verdict rests on the register, strongest first: a fired red line, a crossed threshold, a broken
           or weakening bet watched from the room, a cliff that has passed or is inside 180 days. Failing all of
@@ -490,6 +509,8 @@ function CategoriesView({
             } in no room.`
           : ""}
       </p>
+
+      <ReadDocumentButton bundle={bundle} onDone={onChanged} />
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {results.map((r) => (
@@ -608,12 +629,53 @@ function CategoriesView({
               </div>
             </div>
 
+            <RoomEvidence bundle={bundle} room={r} onChanged={onChanged} />
+
             {!r.signals.length && editable ? (
               <RoomReviewForm key={r.reviewed?.at ?? "none"} strategyId={bundle.strategy.id} room={r} onLogged={onChanged} />
             ) : null}
           </article>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Reading the uploaded document into the ten rooms. Free, offline, no key: it
+ * is lexical search over text already stored, so it can be run as often as
+ * anyone likes.
+ */
+function ReadDocumentButton({ bundle, onDone }: { bundle: StrategyBundle; onDone: () => void }) {
+  const read = useMutation({
+    mutationFn: () => readDocumentIntoRooms({ data: { strategy_id: bundle.strategy.id } }),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `Read the document into ${res.rooms} rooms: ${res.spoke} speak, ${res.silent} silent${res.unmatched ? `, ${res.unmatched} where the room’s words do not match this text` : ""}`,
+      );
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const reads = bundle.room_reads ?? [];
+  const lastRead = reads.map((r) => r.read_at).sort()[reads.length - 1];
+  if (!canEdit(bundle.my_role)) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-3">
+      <Button size="sm" variant="outline" disabled={read.isPending || !bundle.documents?.length} onClick={() => read.mutate()}>
+        {read.isPending ? "Reading…" : "Read the document into the rooms"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        {!bundle.documents?.length
+          ? "No document is stored for this strategy, so there is nothing to read."
+          : lastRead
+            ? `Last read ${day(lastRead)}. Lexical search over the stored text: no model, no key, no cost.`
+            : "Not read yet. Lexical search over the stored text: no model, no key, no cost."}
+      </p>
     </div>
   );
 }

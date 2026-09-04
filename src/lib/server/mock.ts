@@ -7,7 +7,7 @@
  */
 export const MOCK_KEY = "mock";
 
-export type MockTask = "extract" | "consolidate" | "draft" | "peers" | "assess" | "ping" | "generic";
+export type MockTask = "extract" | "consolidate" | "draft" | "peers" | "assess" | "room" | "ping" | "generic";
 
 export function mockEnabled() {
   return process.env.VIGIL_LLM_MOCK === "1" && process.env.NODE_ENV !== "production";
@@ -137,9 +137,11 @@ function mockExtract(prompt: string): string {
     cliff_date: `${y}-12-31`,
     kind: i === 0 ? "fiscal" : "review",
   }));
+  const jurisdiction = text.match(/\bRepublic of ([A-Z][a-z]+)/)?.[0] ?? "";
   return JSON.stringify({
     title: titleOf(text) ?? headings[0] ?? sentences[0]?.slice(0, 80) ?? "Extracted strategy",
     domain,
+    jurisdiction,
     vision: sentences.find((s) => /vision|aims|aspire/i.test(s)) ?? sentences[0] ?? "",
     language: "English",
     horizon_start: range ? `${range[1]}-01-01` : years[0] ? `${years[0]}-01-01` : null,
@@ -295,8 +297,52 @@ function mockAssess(prompt: string): string {
   });
 }
 
+/**
+ * One source per room, so an offline test can tell a search built for Resources
+ * from a search built for Evidence. Without a tag the fixed peer set is
+ * returned, which is what the peer brief expects.
+ */
+export function mockExaResults(tag: string | undefined, numResults: number): typeof MOCK_EXA_RESULTS {
+  if (!tag) return MOCK_EXA_RESULTS.slice(0, numResults);
+  return [
+    {
+      title: `${tag}: national update (offline stand-in)`,
+      url: `https://example.org/mock/${tag.toLowerCase()}`,
+      text: `An offline stand-in for a search about ${tag}. It reports that the arrangements this room watches were changed during the window, and names no real source.`,
+      publishedDate: "2026-06-01",
+    },
+    ...MOCK_EXA_RESULTS,
+  ].slice(0, numResults);
+}
+
+/** One grounded finding plus one that cites nothing, so the source check is exercised. */
+function mockRoom(prompt: string): string {
+  const first = section(prompt, "SOURCES:").match(/^\[1\]\s+(.+?)\s+\(/m);
+  const quote = section(prompt, "SOURCES:").split("\n").find((l) => l.startsWith("An offline stand-in")) ?? "";
+  return JSON.stringify({
+    findings: [
+      {
+        source_index: 1,
+        title: first?.[1] ?? "Offline stand-in source",
+        published_date: "2026-06-01",
+        quote: quote.trim(),
+        why: "The arrangements this room watches were changed inside the window. Nothing is decided until a person turns this into a watchpoint.",
+      },
+      {
+        source_index: 99,
+        title: "Invented document",
+        published_date: "2026-01-01",
+        quote: "This finding cites no returned source and must be dropped.",
+        why: "Tests the source check.",
+      },
+    ],
+  });
+}
+
 export function mockChat(task: MockTask, prompt: string): string {
   switch (task) {
+    case "room":
+      return mockRoom(prompt);
     case "extract":
       return mockExtract(prompt);
     case "consolidate":

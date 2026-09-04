@@ -39,6 +39,11 @@ export type Strategy = {
   vision: string;
   /** Language of the official document, e.g. "Romanian". Amendments are drafted in it. */
   language: string;
+  /**
+   * Whose strategy this is: a country, or the organisation that adopted it. A
+   * room cannot ask the world what has changed without naming it.
+   */
+  jurisdiction: string;
   /** How much of the source the extraction read, and with what. Empty for hand-built strategies. */
   extraction_note: string;
   horizon_start: string | null;
@@ -255,6 +260,43 @@ export type Metrics = {
   next_cliff_name: string | null;
 };
 
+/** A verbatim sentence the document gives for one room, and the page it sits on. */
+export type RoomPassage = {
+  id: number;
+  category: number;
+  rank: number;
+  locator: string;
+  quote: string;
+  terms_hit: number;
+  read_at: string;
+};
+
+/** When a room was last read out of the document, including the rooms that said nothing. */
+export type RoomRead = {
+  category: number;
+  read_at: string;
+  passages: number;
+  /** false when the room's terms match nothing in this text: a failed search, not a silent document. */
+  terms_matched: boolean;
+};
+
+/** Something the world says about one room. A proposal until a person keeps it. */
+export type RoomFinding = {
+  id: number;
+  category: number;
+  title: string;
+  url: string;
+  published_date: string;
+  quote: string;
+  why: string;
+  query: string;
+  searched_at: string;
+  status: "proposed" | "kept" | "dismissed";
+  decided_at: string | null;
+  rationale: string;
+  author: string | null;
+};
+
 export type StrategyDocument = {
   id: number;
   filename: string;
@@ -327,6 +369,9 @@ export type StrategyBundle = {
   documents: StrategyDocument[];
   amendments: Amendment[];
   peer_research: PeerResearch | null;
+  room_passages: RoomPassage[];
+  room_reads: RoomRead[];
+  room_findings: RoomFinding[];
   queue: QueueItem[];
   metrics: Metrics;
 };

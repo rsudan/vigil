@@ -19,6 +19,9 @@ import type {
   Member,
   PeerFinding,
   PeerResearch,
+  RoomFinding,
+  RoomPassage,
+  RoomRead,
   Signal,
   Strategy,
   StrategyBundle,
@@ -35,7 +38,7 @@ async function touch(sql: Sql, strategyId: number) {
 
 async function loadStrategy(sql: Sql, id: number): Promise<Strategy> {
   const rows = await sql<Strategy>`
-    select id, user_id, title, domain, vision, language, extraction_note, horizon_start, horizon_end,
+    select id, user_id, title, domain, vision, language, jurisdiction, extraction_note, horizon_start, horizon_end,
            delivery_rag, created_at::text as created_at, updated_at::text as updated_at
     from strategies where id = ${id}
   `;
@@ -178,6 +181,26 @@ export async function loadBundle(
     ...memberRows,
   ];
 
+  const room_passages = await sql<RoomPassage>`
+    select id, category, rank, locator, quote, terms_hit, read_at::text as read_at
+    from room_passages where strategy_id = ${strategyId}
+    order by category, rank
+  `;
+  const room_reads = await sql<RoomRead>`
+    select category, read_at::text as read_at, passages, terms_matched
+    from room_reads where strategy_id = ${strategyId}
+    order by category
+  `;
+  const room_findings = await sql<RoomFinding>`
+    select f.id, f.category, f.title, f.url, f.published_date, f.quote, f.why, f.query,
+           f.searched_at::text as searched_at, f.status, f.decided_at::text as decided_at, f.rationale,
+           coalesce(p.display_name, p.email) as author
+    from room_findings f
+    left join profiles p on p.user_id = f.user_id
+    where f.strategy_id = ${strategyId}
+    order by f.category, f.searched_at desc, f.id desc
+  `;
+
   const queue = buildQueue({ strategy, assumptions, signals, interrupts, cliffs, decisions });
   const metrics = buildMetrics({ assumptions, signals, cliffs, interrupts, queue });
   return {
@@ -194,6 +217,9 @@ export async function loadBundle(
     documents,
     amendments,
     peer_research,
+    room_passages,
+    room_reads,
+    room_findings,
     queue: queue.queue,
     metrics,
   };
@@ -220,7 +246,7 @@ export const listStrategies = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<StrategySummary[]> => {
     const sql = await getSql();
     const rows = await sql<Strategy & { my_role: MemberRole }>`
-      select s.id, s.user_id, s.title, s.domain, s.vision, s.language, s.extraction_note, s.horizon_start, s.horizon_end,
+      select s.id, s.user_id, s.title, s.domain, s.vision, s.language, s.jurisdiction, s.extraction_note, s.horizon_start, s.horizon_end,
              s.delivery_rag, s.created_at::text as created_at, s.updated_at::text as updated_at,
              case when s.user_id = ${context.userId} then 'owner' else m.role end as my_role
       from strategies s
@@ -244,10 +270,10 @@ export const createStrategy = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     const rows = await sql<{ id: number }>`
-      insert into strategies (user_id, title, domain, vision, language, horizon_start, horizon_end)
+      insert into strategies (user_id, title, domain, vision, language, jurisdiction, horizon_start, horizon_end)
       values (
         ${context.userId}, ${data.title}, ${data.domain ?? ""}, ${data.vision ?? ""}, ${data.language ?? ""},
-        ${data.horizon_start ?? null}, ${data.horizon_end ?? null}
+        ${data.jurisdiction ?? ""}, ${data.horizon_start ?? null}, ${data.horizon_end ?? null}
       )
       returning id
     `;
@@ -267,6 +293,7 @@ export const updateStrategy = createServerFn({ method: "POST" })
         domain = ${data.domain ?? current.domain},
         vision = ${data.vision ?? current.vision},
         language = ${data.language ?? current.language},
+        jurisdiction = ${data.jurisdiction ?? current.jurisdiction},
         horizon_start = ${data.horizon_start === undefined ? current.horizon_start : data.horizon_start},
         horizon_end = ${data.horizon_end === undefined ? current.horizon_end : data.horizon_end},
         updated_at = now()
@@ -296,13 +323,14 @@ export const loadRomaniaSample = createServerFn({ method: "POST" })
     const sql = await getSql();
     const strategyId = await sql.transaction(async (tx) => {
       const created = await tx<{ id: number }>`
-        insert into strategies (user_id, title, domain, vision, language, horizon_start, horizon_end, delivery_rag)
+        insert into strategies (user_id, title, domain, vision, language, jurisdiction, horizon_start, horizon_end, delivery_rag)
         values (
           ${context.userId},
           ${ROMANIA_SEED.strategy.title},
           ${ROMANIA_SEED.strategy.domain},
           ${ROMANIA_SEED.strategy.vision},
           ${ROMANIA_SEED.strategy.language},
+          ${ROMANIA_SEED.strategy.jurisdiction},
           ${ROMANIA_SEED.strategy.horizon_start},
           ${ROMANIA_SEED.strategy.horizon_end},
           ${ROMANIA_SEED.strategy.delivery_rag}

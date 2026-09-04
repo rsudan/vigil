@@ -2,7 +2,7 @@ import { categoryGuide } from "./category-guide.ts";
 import { DAY, RANK, daysUntil, latestDecisions } from "./compute.ts";
 import { day } from "./day.ts";
 import { INTENSITY_ORDER, PRESSURE_RANGE, pressureBand, roomOfCliff, roomOfInterrupt } from "./taxonomy.ts";
-import type { Assumption, Cliff, Interrupt, Signal, StrategyBundle } from "./types.ts";
+import type { Assumption, Cliff, Interrupt, RoomFinding, RoomPassage, RoomRead, Signal, StrategyBundle } from "./types.ts";
 
 /**
  * A room is the method's coverage instrument: every strategy is read through
@@ -21,6 +21,13 @@ import type { Assumption, Cliff, Interrupt, Signal, StrategyBundle } from "./typ
  * A room with no active watchpoint is a gap, not calm. Only a fired red line or
  * a passed, undecided cliff overrides that; an armed red line or a far cliff is
  * named in a second sentence and colours nothing.
+ *
+ * What the document says in a room, and what a search found about it, ride
+ * along and colour nothing at all. They are not pre-committed conditions: the
+ * document was already true the day it was signed, and a search result is dated
+ * but was never agreed. The only path from either into a colour is a person
+ * making a watchpoint or a red line out of it. Material in an unwatched room
+ * makes the gap read worse, never better.
  *
  * The reading names the strongest fact in the room, ranked the way the queue
  * ranks it, so the room and the queue can never tell a different story.
@@ -70,6 +77,14 @@ export type CategoryResult = {
   /** Facts the reading did not use. Empty when there are none. */
   also: string;
   reviewed: RoomReview | null;
+  /** Verbatim sentences the uploaded document gives for this room. */
+  passages: RoomPassage[];
+  /** When this room was last read out of the document, and whether the search itself worked. */
+  read: RoomRead | null;
+  /** Candidates a search brought back, newest first. Dismissed ones are kept, not shown here. */
+  findings: RoomFinding[];
+  /** Candidates dismissed in this room, kept as the record of what was declined. */
+  dismissed: RoomFinding[];
 };
 
 const VERDICT_ORDER: Record<CategoryVerdict, number> = { gap: 0, quiet: 1, moderate: 2, high: 3, severe: 4 };
@@ -330,6 +345,19 @@ export function analyzeCategory(bundle: StrategyBundle, categoryId: number, now 
       : null;
   if (reviewed) reading += ` Reviewed on ${day(reviewed.at)}${reviewed.author ? ` by ${reviewed.author}` : ""}: nothing to watch.`;
 
+  const passages = (bundle.room_passages ?? []).filter((p) => p.category === categoryId);
+  const read = (bundle.room_reads ?? []).find((r) => r.category === categoryId) ?? null;
+  const roomFindings = (bundle.room_findings ?? []).filter((f) => f.category === categoryId);
+  const findings = roomFindings.filter((f) => f.status !== "dismissed");
+  const dismissed = roomFindings.filter((f) => f.status === "dismissed");
+
+  // A room nobody watches, that the document itself speaks to, is the worst
+  // room on the page. Say so where the reading ends.
+  if (!signals.length && passages.length) {
+    const where = [...new Set(passages.map((p) => p.locator))].join(", ");
+    reading += ` The document speaks here on ${where}, and nothing watches it.`;
+  }
+
   const alsoFacts = [...facts.slice(1).map((f) => f.note), ...(inlineNotes ? [] : notes)];
 
   return {
@@ -356,6 +384,10 @@ export function analyzeCategory(bundle: StrategyBundle, categoryId: number, now 
     reading,
     also: alsoFacts.length ? `Also here: ${alsoFacts.join("; ")}.` : "",
     reviewed,
+    passages,
+    read,
+    findings,
+    dismissed,
   };
 }
 

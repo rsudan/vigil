@@ -1,6 +1,14 @@
+/**
+ * The ten rooms every strategy is read through. `terms` is the retrieval
+ * vocabulary used to find what the uploaded document says in each room: the
+ * words strategies actually use, deliberately free of any one country or
+ * funding instrument. `example` is Romania-specific and is shown only in the
+ * public methodology section, never inside a workspace or a query.
+ */
 export const CATEGORY_GUIDE = [
   {
     id: 1,
+    terms: "demographic population migration emigration ageing climate hazard drought flood economic shock inflation recession crisis conflict trend projection forecast context",
     short: "External",
     name: "The world outside the plan",
     question: "Has the world around this strategy moved?",
@@ -11,6 +19,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 2,
+    terms: "platform system digital data registry database information technology infrastructure interoperability cyber security online record completeness equipment software",
     short: "Technology",
     name: "The systems the plan depends on",
     question: "Do the tools and data this plan needs still work?",
@@ -21,6 +30,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 3,
+    terms: "assumption premise depends condition provided expected result theory logic causal contribute leads intervention rationale",
     short: "Assumptions",
     name: "The story of how change happens",
     question: "Is the plan’s own story still true?",
@@ -31,6 +41,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 4,
+    terms: "action plan implementation implementing milestone deadline responsible expected result evaluation stage indicator target output progress report monitoring achieved",
     short: "Delivery",
     name: "Whether the work is getting done",
     question: "Are we doing what we said we would do?",
@@ -41,6 +52,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 5,
+    terms: "budget funding financing allocation allocated cost expenditure resource capacity staff personnel vacancy absorption cofinancing sustainability",
     short: "Resources",
     name: "Money and people",
     question: "Is the money and the capacity still there?",
@@ -51,6 +63,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 6,
+    terms: "institutional mandate coordination coordinating committee council ministry legal law decision regulation government responsibility competence governance framework",
     short: "Mandate",
     name: "Who is allowed to act",
     question: "Does the coordinating body still have the power — and does it use it?",
@@ -61,6 +74,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 7,
+    terms: "vulnerable disadvantaged rural inclusion participation access equity beneficiary trust consultation excluded reach uptake disability minority poverty",
     short: "Legitimacy",
     name: "Who actually benefits",
     question: "Do the people named in the plan actually receive what it promises?",
@@ -71,6 +85,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 8,
+    terms: "risk threat vulnerability threshold exposure crisis emergency loss damage adverse scenario mitigation severity incident",
     short: "Risks",
     name: "Events that should reopen the document",
     question: "Has a threshold been crossed that the plan itself cannot absorb?",
@@ -81,6 +96,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 9,
+    terms: "study evaluation report review directive recommendation guidance comparison benchmark practice peer international regional binding evidence research",
     short: "Evidence",
     name: "What others have learned",
     question: "Has new evidence, a neighbour’s practice, or a binding rule made our text outdated?",
@@ -91,6 +107,7 @@ export const CATEGORY_GUIDE = [
   },
   {
     id: 10,
+    terms: "opportunity instrument window programme call grant partnership innovation emerging potential initiative facility new option",
     short: "Opportunity",
     name: "Windows you would regret missing",
     question: "Is there a new option that would change what this plan should do?",

@@ -1,4 +1,4 @@
-import { MOCK_EXA_RESULTS, isMockKey } from "@/lib/server/mock";
+import { isMockKey, mockExaResults } from "@/lib/server/mock";
 
 export type ExaResult = { title: string; url: string; text: string; publishedDate: string | null };
 
@@ -6,10 +6,15 @@ export type ExaResult = { title: string; url: string; text: string; publishedDat
 export async function exaSearch(
   key: string,
   query: string,
-  opts: { numResults: number; maxCharacters: number; startPublishedDate?: string },
+  /**
+   * `tag` never reaches Exa. It shapes the offline mock only, so a test can
+   * prove that a search was built for one particular room rather than ten
+   * identical searches.
+   */
+  opts: { numResults: number; maxCharacters: number; startPublishedDate?: string; tag?: string },
 ): Promise<{ ok: true; results: ExaResult[] } | { ok: false; status: number }> {
   if (isMockKey(key)) {
-    return { ok: true, results: MOCK_EXA_RESULTS.slice(0, opts.numResults) };
+    return { ok: true, results: mockExaResults(opts.tag, opts.numResults) };
   }
   const res = await fetch("https://api.exa.ai/search", {
     method: "POST",

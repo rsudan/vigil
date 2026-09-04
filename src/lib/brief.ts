@@ -52,6 +52,7 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   parts.push(`# ${s.title}`);
   parts.push("");
   parts.push(`Domain: ${s.domain || "—"}`);
+  if (s.jurisdiction) parts.push(`Jurisdiction: ${s.jurisdiction}`);
   if (s.language) parts.push(`Document language: ${s.language}`);
   parts.push(`Horizon: ${s.horizon_start ?? "—"} to ${s.horizon_end ?? "—"}`);
   parts.push(`Generated: ${new Date().toISOString().slice(0, 10)}`);
@@ -161,6 +162,27 @@ export function analysisMarkdown(bundle: StrategyBundle) {
       for (const b of r.bets) {
         parts.push(`- ${line(b.assumption.claim)} (${b.assumption.status}; via ${b.via.map((s) => s.name).join(", ")})`);
       }
+    }
+    if (!r.read) {
+      parts.push("From the document: not read into the rooms yet.");
+    } else if (!r.read.terms_matched) {
+      parts.push("From the document: this room's words do not appear in the stored text, so the search failed rather than the document being silent.");
+    } else if (!r.passages.length) {
+      parts.push("From the document: silent on this room.");
+    } else {
+      parts.push("From the document (verbatim, found by lexical search):");
+      for (const p of r.passages) parts.push(`- ${p.locator}: "${line(p.quote)}"`);
+    }
+    if (r.findings.length) {
+      parts.push("From the world (proposed, cites a returned source):");
+      for (const f of r.findings) {
+        parts.push(`- [${f.status}] ${f.title}${f.published_date ? ` (${f.published_date})` : ""} — ${f.url}`);
+        if (f.quote) parts.push(`  "${line(f.quote)}"`);
+        if (f.why) parts.push(`  ${line(f.why)}`);
+      }
+    }
+    if (r.dismissed.length) {
+      parts.push(`${r.dismissed.length} candidate${r.dismissed.length === 1 ? "" : "s"} dismissed in this room and kept in the record.`);
     }
     parts.push("");
   }
