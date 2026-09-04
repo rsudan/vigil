@@ -332,7 +332,43 @@ async function main() {
     await page.getByRole("button", { name: "Re-arm" }).first().waitFor();
   });
 
+  await step("assess the strategy: rate delivery with a basis, check a bet, then accept a model proposal", async () => {
+    await tab(page, "Overview");
+    await page.getByRole("button", { name: /Assess this strategy|Update assessment/ }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor();
+    await dialog.getByLabel(/^Amber/).check();
+    await dialog.getByLabel("Source of the score").fill("Annual progress report 2025, Ministry of Digital, p. 31");
+    await dialog.getByLabel("As of").fill("2025-12-31");
+    await dialog.getByLabel(/^Basis/).fill("2025 progress report: 14 of 41 Annex 1 actions delivered on time; two connectivity packages stalled.");
+    const row = dialog.locator("[data-bet-row]").nth(1);
+    await row.getByRole("button", { name: "Change" }).click();
+    await row.getByLabel("Status").selectOption("weakening");
+    await row.getByLabel(/Evidence for the change/).fill("County returns Q2 2026: three of eight counties below 50 percent absorption.");
+    await dialog.getByRole("button", { name: "Save assessment" }).click();
+    const t = await toast(page, /Assessment saved · delivery amber · validity/);
+    log(`    ${t}`);
+    await page.getByText("Delivery · did we do the plan?").waitFor();
+    assert((await page.getByText(/Rated by .* as of 2025-12-31/).count()) >= 1, "delivery provenance line missing");
+    await page.getByText(/What sets the colour/).waitFor();
+    await page.screenshot({ path: join(WORK, "overview-assessed.png"), fullPage: true });
+    // Second pass: the model proposes, a person accepts one row, and the desk mark is kept.
+    await page.getByRole("button", { name: "Update assessment" }).click();
+    const again = page.getByRole("dialog");
+    await again.getByRole("button", { name: "Propose from what is on file" }).click();
+    await again.getByText(/\d+ proposals?\./).waitFor({ timeout: REAL ? 600_000 : 60_000 });
+    const accept = again.locator("[data-bet-row]").first().getByRole("checkbox");
+    await accept.check();
+    await again.getByRole("button", { name: "Save assessment" }).click();
+    await toast(page, /Assessment saved/);
+    await tab(page, "Assumptions");
+    await page.getByRole("row").nth(1).click();
+    await page.getByText("model-drafted").first().waitFor();
+    await page.getByRole("button", { name: "Close" }).click();
+  });
+
   await step("add and remove a cliff", async () => {
+    await tab(page, "Review");
     await page.getByLabel("New cliff").fill("Gauntlet funding sunset");
     await page.getByLabel("Date").fill("2027-06-30");
     await page.getByRole("button", { name: "Add", exact: true }).click();

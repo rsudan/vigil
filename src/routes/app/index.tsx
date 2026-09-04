@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { extractStrategy } from "@/lib/server/ai";
+import { deliveryWord } from "@/lib/glossary";
 import { readExtractPref, readSessionKeys } from "@/lib/session-keys";
 import { createStrategy, deleteStrategy, listStrategies, loadRomaniaSample } from "@/lib/server/strategies";
 import type { Attention } from "@/lib/types";
@@ -155,7 +156,8 @@ function Portfolio() {
                         {s.title}
                       </Link>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {s.domain || "No domain"} · delivery {s.delivery_rag} · you are {s.my_role}
+                        {s.domain || "No domain"} · delivery {deliveryWord(s.delivery_rag).toLowerCase()} ·
+                        validity {s.validity.label.toLowerCase()} · you are {s.my_role}
                       </p>
                     </div>
                     <AttentionChips a={s.attention} />

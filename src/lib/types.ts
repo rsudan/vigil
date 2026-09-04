@@ -62,7 +62,7 @@ export type Attention = {
   next_cliff_name: string | null;
 };
 
-export type StrategySummary = Strategy & { my_role: MemberRole; attention: Attention };
+export type StrategySummary = Strategy & { my_role: MemberRole; attention: Attention; validity: Validity };
 
 export type Assumption = {
   id: number;
@@ -120,9 +120,67 @@ export type Evidence = {
   /** The signal value recorded with this evidence, when it is a reading. */
   reading: string;
   source_url: string;
-  direction: "supporting" | "weakening";
+  direction: "supporting" | "weakening" | "neutral";
+  /** "desk" when a model drafted the note and a person accepted it. */
+  method: "person" | "desk";
   created_at: string;
   author: string | null;
+};
+
+/** One delivery rating: a colour with who, when, and what report it rests on. Append-only. */
+export type DeliveryRating = {
+  id: number;
+  strategy_id: number;
+  user_id: string;
+  rag: "green" | "amber" | "red" | "unrated";
+  basis: string;
+  source_label: string;
+  source_url: string;
+  as_of: string | null;
+  method: "person" | "desk";
+  created_at: string;
+  author: string | null;
+};
+
+export type ValidityLevel = "not-assessed" | "partly-checked" | "holding" | "weakening" | "broken";
+
+/** The colour of the bets, derived from their statuses; see validityOf(). */
+export type Validity = {
+  rag: "green" | "amber" | "red" | "unrated";
+  level: ValidityLevel;
+  label: string;
+  meaning: string;
+  reason: string;
+  holding: number;
+  weakening: number;
+  broken: number;
+  untested: number;
+  total: number;
+  checked: number;
+};
+
+/** What a model proposes for an assessment. Nothing here is saved until a person accepts it. */
+export type AssessmentProposal = {
+  delivery: {
+    rag: "green" | "amber" | "red" | "unrated";
+    basis: string;
+    source_label: string;
+    rests_on: string;
+    excerpt: string;
+    excerpt_verified: boolean | null;
+  } | null;
+  bets: {
+    assumption_id: number;
+    status: AssumptionStatus;
+    note: string;
+    rests_on: string;
+    excerpt: string;
+    excerpt_verified: boolean | null;
+    settles_it: string;
+  }[];
+  grounded: number;
+  desk_only: number;
+  progress_on_file: boolean;
 };
 
 export type Interrupt = {
@@ -256,6 +314,8 @@ export type StrategyBundle = {
   strategy: Strategy;
   my_role: MemberRole;
   members: Member[];
+  /** Latest first, at most twenty. The first row is the current delivery rating. */
+  delivery_ratings: DeliveryRating[];
   assumptions: Assumption[];
   signals: Signal[];
   interrupts: Interrupt[];

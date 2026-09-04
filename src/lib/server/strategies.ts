@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql, type Sql } from "@/lib/db";
-import { buildMetrics, buildQueue, withPressure } from "@/lib/compute";
+import { buildMetrics, buildQueue, validityOf, withPressure } from "@/lib/compute";
 import { ROMANIA_SEED } from "@/lib/sample-romania";
-import { BUDGET, type MemberRole } from "@/lib/taxonomy";
+import { BUDGET, type EvidenceDirection, type MemberRole, type RatingMethod } from "@/lib/taxonomy";
 import { assertAccess } from "@/lib/server/access";
 import { findUserByEmail } from "@/lib/server/profiles";
 import { strategies as schema, validate } from "@/lib/server/schemas";
@@ -13,6 +13,7 @@ import type {
   Attention,
   Cliff,
   Decision,
+  DeliveryRating,
   Evidence,
   Interrupt,
   Member,
@@ -104,7 +105,7 @@ export async function loadBundle(
   `;
   const evidence = await sql<Evidence>`
     select e.id, e.strategy_id, e.user_id, e.signal_id, e.assumption_id, e.note, e.reading,
-           e.source_url, e.direction, e.created_at::text as created_at,
+           e.source_url, e.direction, e.method, e.created_at::text as created_at,
            coalesce(p.display_name, p.email) as author
     from evidence e
     left join profiles p on p.user_id = e.user_id
@@ -147,6 +148,16 @@ export async function loadBundle(
     peer_research = { ...head[0], findings };
   }
 
+  const delivery_ratings = await sql<DeliveryRating>`
+    select r.id, r.strategy_id, r.user_id, r.rag, r.basis, r.source_label, r.source_url, r.as_of, r.method,
+           r.created_at::text as created_at, coalesce(p.display_name, p.email) as author
+    from delivery_ratings r
+    left join profiles p on p.user_id = r.user_id
+    where r.strategy_id = ${strategyId}
+    order by r.created_at desc, r.id desc
+    limit 20
+  `;
+
   const memberRows = await sql<Member>`
     select m.user_id, m.role, p.email, p.display_name
     from strategy_members m
@@ -173,6 +184,7 @@ export async function loadBundle(
     strategy,
     my_role: role,
     members,
+    delivery_ratings,
     assumptions,
     signals,
     interrupts,
@@ -221,7 +233,7 @@ export const listStrategies = createServerFn({ method: "GET" })
     for (const row of rows) {
       const { my_role, ...strategy } = row;
       const bundle = await loadBundle(context.userId, row.id, { sql, role: my_role });
-      out.push({ ...strategy, my_role, attention: attentionOf(bundle) });
+      out.push({ ...strategy, my_role, attention: attentionOf(bundle), validity: validityOf(bundle.assumptions) });
     }
     return out;
   });
@@ -255,7 +267,6 @@ export const updateStrategy = createServerFn({ method: "POST" })
         domain = ${data.domain ?? current.domain},
         vision = ${data.vision ?? current.vision},
         language = ${data.language ?? current.language},
-        delivery_rag = ${data.delivery_rag ?? current.delivery_rag},
         horizon_start = ${data.horizon_start === undefined ? current.horizon_start : data.horizon_start},
         horizon_end = ${data.horizon_end === undefined ? current.horizon_end : data.horizon_end},
         updated_at = now()
@@ -299,6 +310,14 @@ export const loadRomaniaSample = createServerFn({ method: "POST" })
         returning id
       `;
       const id = created[0]!.id;
+      await tx`
+        insert into delivery_ratings (strategy_id, user_id, rag, basis, source_label, as_of)
+        values (
+          ${id}, ${context.userId}, ${ROMANIA_SEED.strategy.delivery_rag},
+          ${ROMANIA_SEED.strategy.delivery_basis}, ${ROMANIA_SEED.strategy.delivery_source},
+          ${ROMANIA_SEED.strategy.delivery_as_of}
+        )
+      `;
       const assumptionIds: number[] = [];
       for (const a of ROMANIA_SEED.assumptions) {
         const row = await tx<{ id: number }>`
@@ -424,6 +443,57 @@ export const upsertAssumption = createServerFn({ method: "POST" })
     return { id: row[0]!.id };
   });
 
+type StatusChange = {
+  id: number;
+  /** Omit to keep the status on record and only file the note. */
+  status?: Assumption["status"];
+  note: string;
+  direction?: EvidenceDirection;
+  source_url?: string;
+  method?: RatingMethod;
+};
+
+/**
+ * The one rule for moving a bet, shared by the drawer and the assessment
+ * dialog: a status change needs at least ten characters of evidence. A note
+ * without a status change is simply filed.
+ */
+async function applyAssumptionStatus(
+  tx: Sql,
+  userId: string,
+  strategyId: number,
+  row: StatusChange,
+  label = "this bet",
+) {
+  const current = await tx<{ status: Assumption["status"] }>`
+    select status from assumptions where id = ${row.id} and strategy_id = ${strategyId}
+  `;
+  if (!current[0]) throw new Error(`That assumption is not in this strategy (${label}).`);
+  const status = row.status ?? current[0].status;
+  const changed = current[0].status !== status;
+  const note = row.note.trim();
+  if (changed && note.length < 10) {
+    throw new Error(`Write the evidence that justifies the new status on ${label} (at least ten characters).`);
+  }
+  if (!changed && !note) return { changed: false, wrote: false };
+  const direction =
+    row.direction ?? (status === "holding" ? "supporting" : status === "untested" ? "neutral" : "weakening");
+  if (note) {
+    await tx`
+      insert into evidence (strategy_id, user_id, assumption_id, note, source_url, direction, method)
+      values (${strategyId}, ${userId}, ${row.id}, ${note}, ${row.source_url ?? ""}, ${direction}, ${row.method ?? "person"})
+    `;
+  }
+  await tx`
+    update assumptions set
+      status = ${status},
+      status_changed_at = case when ${changed} then now() else status_changed_at end,
+      last_evidence_at = case when ${Boolean(note)} then now() else last_evidence_at end
+    where id = ${row.id}
+  `;
+  return { changed, wrote: Boolean(note) };
+}
+
 /**
  * Move a bet between holding / weakening / broken / untested. A status change
  * needs an evidence note, which is stored against the assumption; the note is
@@ -435,33 +505,69 @@ export const setAssumptionStatus = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await assertAccess(context.userId, data.strategy_id, "editor", sql);
-    const current = await sql<{ status: Assumption["status"] }>`
-      select status from assumptions where id = ${data.id} and strategy_id = ${data.strategy_id}
-    `;
-    if (!current[0]) throw new Error("Assumption not found");
-    const changed = current[0].status !== data.status;
-    const note = data.note.trim();
-    if (changed && note.length < 3) throw new Error("Write the evidence that justifies the new status.");
-    const direction =
-      data.direction ??
-      (data.status === "holding" ? "supporting" : data.status === "untested" ? "supporting" : "weakening");
-    await sql.transaction(async (tx) => {
-      if (note) {
-        await tx`
-          insert into evidence (strategy_id, user_id, assumption_id, note, source_url, direction)
-          values (${data.strategy_id}, ${context.userId}, ${data.id}, ${note}, ${data.source_url ?? ""}, ${direction})
-        `;
+    const result = await sql.transaction(async (tx) => {
+      const r = await applyAssumptionStatus(tx, context.userId, data.strategy_id, {
+        id: data.id,
+        status: data.status,
+        note: data.note,
+        direction: data.direction,
+        source_url: data.source_url,
+      });
+      await touch(tx, data.strategy_id);
+      return r;
+    });
+    return { ok: true as const, changed: result.changed };
+  });
+
+/**
+ * One sitting's assessment: a delivery rating with its basis, and any bets
+ * whose status or evidence changed, saved together. Delivery can only be
+ * coloured here, so every colour has who, when and what report behind it.
+ */
+export const assessStrategy = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(validate(schema.assess))
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await assertAccess(context.userId, data.strategy_id, "editor", sql);
+    const delivery = data.delivery;
+    if (delivery) {
+      if (delivery.basis.trim().length < 20) throw new Error("Write what the report says (at least twenty characters).");
+      if (delivery.rag !== "unrated" && !delivery.as_of) throw new Error("Give the as-of date of the report the rating rests on.");
+      // A day of tolerance: the server does not know the caller's time zone.
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      if (delivery.as_of && delivery.as_of > tomorrow) {
+        throw new Error("The as-of date cannot be in the future.");
       }
-      await tx`
-        update assumptions set
-          status = ${data.status},
-          status_changed_at = case when ${changed} then now() else status_changed_at end,
-          last_evidence_at = case when ${Boolean(note)} then now() else last_evidence_at end
-        where id = ${data.id}
-      `;
+    }
+    let changed = 0;
+    await sql.transaction(async (tx) => {
+      if (delivery) {
+        await tx`
+          insert into delivery_ratings (strategy_id, user_id, rag, basis, source_label, source_url, as_of, method)
+          values (
+            ${data.strategy_id}, ${context.userId}, ${delivery.rag}, ${delivery.basis.trim()},
+            ${delivery.source_label ?? ""}, ${delivery.source_url ?? ""}, ${delivery.as_of ?? null},
+            ${delivery.method ?? "person"}
+          )
+        `;
+        await tx`update strategies set delivery_rag = ${delivery.rag} where id = ${data.strategy_id}`;
+        changed += 1;
+      }
+      const bets = data.bets ?? [];
+      for (let i = 0; i < bets.length; i += 1) {
+        const r = await applyAssumptionStatus(tx, context.userId, data.strategy_id, bets[i]!, `bet ${i + 1}`);
+        if (r.changed || r.wrote) changed += 1;
+      }
       await touch(tx, data.strategy_id);
     });
-    return { ok: true as const, changed };
+    const rows = await sql<{ status: Assumption["status"] }>`
+      select status from assumptions where strategy_id = ${data.strategy_id}
+    `;
+    const current = await sql<{ delivery_rag: Strategy["delivery_rag"] }>`
+      select delivery_rag from strategies where id = ${data.strategy_id}
+    `;
+    return { ok: true as const, delivery_rag: current[0]!.delivery_rag, validity: validityOf(rows), changed };
   });
 
 export const deleteAssumption = createServerFn({ method: "POST" })

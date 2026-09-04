@@ -1,4 +1,5 @@
-import { BUDGET, cadenceDays, pressure } from "./taxonomy.ts";
+import { CELL_READINGS, VALIDITY_HELP } from "./glossary.ts";
+import { BUDGET, cadenceDays, pressure, type DeliveryRag } from "./taxonomy.ts";
 import type {
   Assumption,
   Cliff,
@@ -9,6 +10,8 @@ import type {
   QueueItem,
   Signal,
   Strategy,
+  Validity,
+  ValidityLevel,
 } from "./types.ts";
 
 export const DAY = 86400000;
@@ -349,4 +352,67 @@ export function buildMetrics(input: {
     days_to_cliff: nextCliff ? Math.round((nextCliff.t - now) / DAY) : null,
     next_cliff_name: nextCliff?.c.name ?? null,
   };
+}
+
+/**
+ * The colour of the bets, derived only from their statuses and never set by
+ * hand. Green needs every bet checked and holding; a mix of holding and
+ * untested is "partly checked", not green.
+ */
+export function validityOf(assumptions: Pick<Assumption, "status">[]): Validity {
+  const total = assumptions.length;
+  const count = (s: Assumption["status"]) => assumptions.filter((a) => a.status === s).length;
+  const holding = count("holding");
+  const weakening = count("weakening");
+  const broken = count("broken");
+  const untested = count("untested");
+  const checked = total - untested;
+  const bets = (n: number) => `${n} bet${n === 1 ? "" : "s"}`;
+  let level: ValidityLevel;
+  let rag: DeliveryRag;
+  let reason: string;
+  if (broken) {
+    level = "broken";
+    rag = "red";
+    reason = `${bets(broken)} of ${total} ${broken === 1 ? "is" : "are"} broken${weakening ? `, ${weakening} weakening` : ""}.`;
+  } else if (weakening) {
+    level = "weakening";
+    rag = "amber";
+    reason = `${bets(weakening)} of ${total} ${weakening === 1 ? "is" : "are"} weakening${untested ? `; ${untested} not yet checked` : ""}.`;
+  } else if (total > 0 && checked === total) {
+    level = "holding";
+    rag = "green";
+    reason = `${total} of ${total} holding.`;
+  } else if (checked > 0) {
+    level = "partly-checked";
+    rag = "unrated";
+    reason = `${checked} of ${total} bets checked, all holding. ${untested} not yet checked. No colour until every bet has been looked at, or one moves.`;
+  } else {
+    level = "not-assessed";
+    rag = "unrated";
+    reason = total
+      ? `${bets(total)}, none checked yet. A bet is untested until someone records evidence on it. That is honest, not green.`
+      : "No bets named yet. Add the load-bearing assumptions first; validity is the colour of those bets.";
+  }
+  const help = VALIDITY_HELP[level];
+  return { rag, level, label: help.label, meaning: help.meaning, reason, holding, weakening, broken, untested, total, checked };
+}
+
+/** The one-sentence reading of the delivery × validity cell. */
+export function cellReading(delivery: DeliveryRag, validity: Validity): string {
+  if (delivery === "unrated" && validity.rag === "unrated") {
+    return validity.total
+      ? "Not yet assessed. Rate delivery and check the bets to get a reading."
+      : "Not yet assessed. Name the load-bearing bets, then rate delivery and check them.";
+  }
+  if (validity.rag === "unrated") {
+    return `Delivery is ${delivery}; the bets have ${
+      validity.level === "partly-checked" ? "been only partly checked" : "not been checked"
+    }. Until every bet is checked this is a delivery score, not a strategy assessment.`;
+  }
+  if (delivery === "unrated") {
+    return `The bets are ${validity.rag}; delivery has not been scored. Rate delivery from the latest progress report.`;
+  }
+  const template = CELL_READINGS[`${delivery}/${validity.rag}`] ?? "";
+  return template.replace("{weakening}", String(validity.weakening)).replace("{s}", validity.weakening === 1 ? "" : "s");
 }

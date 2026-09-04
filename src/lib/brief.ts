@@ -1,7 +1,7 @@
 import { analyzeAllCategories } from "./category-analysis.ts";
-import { thresholdText } from "./compute.ts";
+import { cellReading, thresholdText, validityOf } from "./compute.ts";
 import { PRESSURE_RANGE, categoryById, INTENSITIES } from "./taxonomy.ts";
-import { TERMS } from "./glossary.ts";
+import { TERMS, deliveryWord } from "./glossary.ts";
 import { methodSummaryMarkdown } from "./methodology.ts";
 import type { Amendment, PeerResearch, StrategyBundle } from "./types.ts";
 import { categoryGuide } from "./category-guide.ts";
@@ -21,10 +21,22 @@ function day(value: string | null | undefined) {
 
 function snapshot(bundle: StrategyBundle) {
   const m = bundle.metrics;
+  const validity = validityOf(bundle.assumptions);
+  const rating = bundle.delivery_ratings[0] ?? null;
   const parts = ["## Snapshot"];
   parts.push(
-    `- Assumption integrity: ${m.holding} holding, ${m.weakening} weakening, ${m.broken} broken, ${m.untested} untested`,
+    `- Delivery (did we do the plan?): ${deliveryWord(bundle.strategy.delivery_rag).toLowerCase()}${
+      rating
+        ? ` — ${rating.source_label ? `${rating.source_label}, ` : ""}as of ${rating.as_of ?? "—"}; rated ${day(rating.created_at)} by ${rating.author ?? "a member"}${
+            rating.method === "desk" ? " (proposed by a model, accepted by them)" : ""
+          }: “${rating.basis}”`
+        : ""
+    }`,
   );
+  parts.push(
+    `- Validity (are the bets still true?): ${validity.label.toLowerCase()} — ${validity.holding} holding, ${validity.weakening} weakening, ${validity.broken} broken, ${validity.untested} untested`,
+  );
+  parts.push(`- Reading: ${cellReading(bundle.strategy.delivery_rag, validity)}`);
   parts.push(`- Coverage (assumptions with a live sentinel): ${Math.round(m.coverage_ratio * 100)}%`);
   parts.push(
     `- Signal budget: ${m.active_signals}/30 active, ${m.sentinel_count}/8 sentinels, ${m.stale_count} stale, ${m.crossed_count} past a threshold`,
@@ -50,7 +62,6 @@ export function analysisMarkdown(bundle: StrategyBundle) {
   parts.push(`Domain: ${s.domain || "—"}`);
   if (s.language) parts.push(`Document language: ${s.language}`);
   parts.push(`Horizon: ${s.horizon_start ?? "—"} to ${s.horizon_end ?? "—"}`);
-  parts.push(`Delivery (existing M&E): ${s.delivery_rag}`);
   parts.push(`Generated: ${new Date().toISOString().slice(0, 10)}`);
   parts.push("");
   if (s.vision) {
@@ -69,7 +80,8 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     parts.push(`- Status: ${a.status} (since ${day(a.status_changed_at)})`);
     parts.push(`- If broken: ${a.implied_intensity}`);
     parts.push(`- Owner: ${a.owner_label || "unassigned"}`);
-    parts.push(`- Last evidence: ${day(a.last_evidence_at)}`);
+    const latestNote = bundle.evidence.find((e) => e.assumption_id === a.id);
+    parts.push(`- Last evidence: ${day(a.last_evidence_at)}${latestNote?.method === "desk" ? " (model-drafted, accepted by a person)" : ""}`);
     parts.push("");
   }
   parts.push("## Signals");

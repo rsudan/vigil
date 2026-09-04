@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { INTENSITY_HELP, RAG_HELP, STATUS_HELP, TERMS, type TermId } from "@/lib/glossary";
+import { INTENSITY_HELP, RAG_HELP, STATUS_HELP, TERMS, VALIDITY_HELP, type TermId } from "@/lib/glossary";
 import { PRESSURE_RANGE, pressureBand } from "@/lib/taxonomy";
 import { Badge } from "./ui/badge";
 
@@ -46,7 +46,17 @@ export function ColorLegend() {
         <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
           {RAG_HELP.map((s) => (
             <li key={s.id}>
-              <span className="font-medium uppercase text-foreground">{s.id}</span> — {s.meaning}
+              <span className="font-medium uppercase text-foreground">{s.label}</span> — {s.meaning}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">Validity of the bets</p>
+        <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+          {Object.entries(VALIDITY_HELP).map(([id, v]) => (
+            <li key={id}>
+              <span className="font-medium uppercase text-foreground">{v.label}</span> — {v.meaning}
             </li>
           ))}
         </ul>

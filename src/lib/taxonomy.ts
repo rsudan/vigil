@@ -170,9 +170,16 @@ export type Cadence = (typeof CADENCES)[number];
 
 export const CLIFF_KINDS = ["fiscal", "legal", "scenario", "review"] as const;
 
-export const EVIDENCE_DIRECTIONS = ["supporting", "weakening"] as const;
+/** Neutral is for notes that neither support nor weaken: a work order on an untested bet. */
+export const EVIDENCE_DIRECTIONS = ["supporting", "weakening", "neutral"] as const;
+export type EvidenceDirection = (typeof EVIDENCE_DIRECTIONS)[number];
 
 export const DELIVERY_RAGS = ["green", "amber", "red", "unrated"] as const;
+export type DeliveryRag = (typeof DELIVERY_RAGS)[number];
+
+/** Who produced a rating or an evidence note: a person, or a model draft a person accepted. */
+export const RATING_METHODS = ["person", "desk"] as const;
+export type RatingMethod = (typeof RATING_METHODS)[number];
 
 /** Roles on a shared strategy. The creator is the owner; members are added by email. */
 export const MEMBER_ROLES = ["owner", "editor", "viewer"] as const;
