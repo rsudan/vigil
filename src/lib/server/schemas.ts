@@ -9,6 +9,7 @@ import {
   EVIDENCE_DIRECTIONS,
   INTENSITIES,
   PROVIDERS,
+  RATING_METHODS,
   REVISION_INTENSITIES,
   SIGNAL_LAYERS,
   SIGNAL_STATUSES,
@@ -64,10 +65,39 @@ export const strategies = {
     domain: optText(120),
     vision: optText(2000),
     language: optText(60),
-    delivery_rag: z.enum(DELIVERY_RAGS).optional(),
     horizon_start: nullableDate,
     horizon_end: nullableDate,
   }),
+  // Delivery is rated only here, never through update, so every colour has a basis.
+  assess: z
+    .object({
+      strategy_id: id,
+      delivery: z
+        .object({
+          rag: z.enum(DELIVERY_RAGS),
+          basis: text(2000),
+          source_label: optText(200),
+          source_url: optText(500),
+          as_of: optDate,
+          method: z.enum(RATING_METHODS).optional(),
+        })
+        .optional(),
+      bets: z
+        .array(
+          z.object({
+            id,
+            // Absent when the row only files a note: the status on record stays as it is.
+            status: z.enum(ASSUMPTION_STATUSES).optional(),
+            note: text(4000),
+            direction: z.enum(EVIDENCE_DIRECTIONS).optional(),
+            source_url: optText(500),
+            method: z.enum(RATING_METHODS).optional(),
+          }),
+        )
+        .max(12)
+        .optional(),
+    })
+    .refine((v) => Boolean(v.delivery) || Boolean(v.bets && v.bets.length), "Rate delivery or change at least one bet."),
   byId: z.object({ id }),
   scoped: z.object({ strategy_id: id, id }),
   upsertAssumption: z.object({
@@ -219,5 +249,6 @@ export const ai = {
 
 export const research = {
   draft: z.object({ strategy_id: id, sessionKeys }),
+  propose: z.object({ strategy_id: id, sessionKeys }),
   peers: z.object({ strategy_id: id, recency_years: z.number().int().min(1).max(10), sessionKeys }),
 };

@@ -13,7 +13,8 @@ import { loadBundle } from "@/lib/server/strategies";
 import { analyzeAllCategories } from "@/lib/category-analysis";
 import { thresholdText } from "@/lib/compute";
 import { CATEGORY_GUIDE } from "@/lib/category-guide";
-import { REVISION_INTENSITIES } from "@/lib/taxonomy";
+import { ASSUMPTION_STATUSES, DELIVERY_RAGS, REVISION_INTENSITIES } from "@/lib/taxonomy";
+import type { AssessmentProposal } from "@/lib/types";
 
 type Chunk = { heading: string; body: string };
 
@@ -343,4 +344,154 @@ ${sourceBlock}`;
     });
 
     return { ok: true as const, id: researchId, sources: sources.length, findings: findings.length, dropped };
+  });
+
+/**
+ * A desk assessment: the model reads what is on file and proposes a delivery
+ * rating and a status per bet. Nothing is written. A person accepts each row in
+ * the dialog, and accepted rows are saved with method = "desk".
+ */
+export const proposeAssessment = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(validate(schema.propose))
+  .handler(async ({ context, data }): Promise<{ ok: false; error: string } | { ok: true; proposal: AssessmentProposal }> => {
+    assertRateLimit(context.userId, "llm");
+    const role = await assertAccess(context.userId, data.strategy_id, "editor");
+    const llm = await resolveLlm(context.userId, data.sessionKeys);
+    if (!llm) {
+      return { ok: false as const, error: "No language-model key is configured. Add one on the Keys page, or rate by hand." };
+    }
+    const bundle = await loadBundle(context.userId, data.strategy_id, { role });
+    const chunks = await loadChunks(data.strategy_id);
+    const progressQuery =
+      "progress report annual report monitoring evaluation implementation report indicators delivered on time annex completion timetable";
+    const passages = chunks.length
+      ? rankChunks(chunks, [...bundle.assumptions.map((a) => a.claim), progressQuery], 14)
+      : [];
+    // A statement of progress against the plan, not the plan's own description of how it will report.
+    const PROGRESS = /(\d+\s*(?:of|out of)\s*\d+|per ?cent|%|delivered|completed|achieved|on track|behind schedule|slipp|absorption)/i;
+    const progressOnFile = passages.some((c) => PROGRESS.test(c.body) && /\d/.test(c.body));
+
+    const onFile = new Map<number, { supporting: number; weakening: number; readings: number }>();
+    const betLines = bundle.assumptions
+      .map((a) => {
+        const notes = bundle.evidence.filter((e) => e.assumption_id === a.id);
+        const supporting = notes.filter((e) => e.direction === "supporting").length;
+        const weakening = notes.filter((e) => e.direction === "weakening").length;
+        const latest = notes[0];
+        const readings = bundle.signals
+          .filter((s) => a.linked_signal_ids.includes(s.id) && s.status === "active" && s.current_value.trim())
+          .map(
+            (s) =>
+              `${s.name} = ${s.current_value}${s.crossed_level !== "none" ? ` (crossed ${s.crossed_level})` : ""}${
+                s.last_evidence_at ? `, ${s.last_evidence_at.slice(0, 10)}` : ""
+              }`,
+          );
+        onFile.set(a.id, { supporting, weakening, readings: readings.length });
+        return [
+          `BET ${a.id}: ${a.claim}`,
+          `  status now: ${a.status} (since ${a.status_changed_at.slice(0, 10)})`,
+          `  on file: ${supporting} supporting note(s), ${weakening} weakening note(s)${
+            latest ? `; latest: "${clip(latest.note, 200)}"` : ""
+          }`,
+          `  linked readings: ${readings.join("; ") || "none"}`,
+        ].join("\n");
+      })
+      .join("\n");
+
+    const prompt = `You assess a national strategy from what is on file. You PROPOSE; a person will accept or reject each row, and nothing is saved until they do.
+
+Return ONLY JSON:
+{
+  "delivery": { "rag": "green"|"amber"|"red"|"unrated", "basis": "one line naming the report and the count or date", "source_label": "which document, which page", "rests_on": "the statement you relied on", "excerpt": "verbatim quotation from PASSAGES, or NOT IN TEXT" },
+  "bets": [{ "assumption_id": number, "status": "holding"|"weakening"|"broken"|"untested", "note": "one line of evidence", "rests_on": "the recorded reading, evidence note or passage you relied on", "excerpt": "verbatim quotation from PASSAGES, or NOT IN TEXT", "settles_it": "for untested: the one observation that would settle the bet, and who would bring it" }]
+}
+
+Rules:
+- Delivery may be green, amber or red ONLY if a statement in PASSAGES reports progress against the plan with a count, a share or a date, and you quote that statement verbatim in "excerpt". The plan's own description of how it will be monitored is not progress. Otherwise "unrated" with basis "No progress report on file."
+- A bet may be holding, weakening or broken ONLY when a recorded reading, an evidence note or a crossed threshold in what is on file supports it. The strategy text asserting its own bet is NOT evidence. Otherwise propose "untested" and fill settles_it.
+- One row per BET, using its id. Quote verbatim; never paraphrase a quotation.
+
+STRATEGY: ${bundle.strategy.title}
+DOMAIN: ${bundle.strategy.domain}
+DELIVERY NOW: ${bundle.strategy.delivery_rag}
+
+BETS:
+${betLines || "(none)"}
+
+PASSAGES:
+${passages.map((c) => `### ${c.heading}\n${c.body.slice(0, 1800)}`).join("\n\n") || "(no source text on file)"}`;
+
+    let parsed: Record<string, unknown>;
+    try {
+      const completion = await chatComplete({
+        provider: llm.provider,
+        key: llm.key,
+        model: llm.model,
+        json: true,
+        maxTokens: 6000,
+        task: "assess",
+        messages: [{ role: "user", content: prompt }],
+      });
+      parsed = parseJsonObject(completion.content);
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : "The desk assessment failed" };
+    }
+
+    const corpus = chunks.map((c) => c.body).join("\n");
+    const verify = (excerpt: string): boolean | null =>
+      isSilenceMarker(excerpt) ? null : corpus ? excerptFound(excerpt, corpus) : false;
+    const ids = new Set(bundle.assumptions.map((a) => a.id));
+    const seen = new Set<number>();
+    const bets: AssessmentProposal["bets"] = [];
+    for (const raw of Array.isArray(parsed.bets) ? parsed.bets : []) {
+      const f = raw as Record<string, unknown>;
+      const assumptionId = Number(f.assumption_id);
+      if (!ids.has(assumptionId) || seen.has(assumptionId)) continue;
+      seen.add(assumptionId);
+      let status = oneOf(f.status, ASSUMPTION_STATUSES, "untested");
+      const file = onFile.get(assumptionId) ?? { supporting: 0, weakening: 0, readings: 0 };
+      // The guard the prompt states, enforced: no file, no colour. A downgraded
+      // row loses the model's "supports holding" note, which would be filed on an untested bet.
+      const downgraded = status !== "untested" && file.supporting + file.weakening + file.readings === 0;
+      if (downgraded) status = "untested";
+      const excerpt = clip(f.excerpt, 600).trim();
+      bets.push({
+        assumption_id: assumptionId,
+        status,
+        note: downgraded ? "" : clip(f.note, 800).trim(),
+        rests_on: downgraded ? "The document alone" : clip(f.rests_on, 400).trim(),
+        excerpt: isSilenceMarker(excerpt) ? "" : excerpt,
+        excerpt_verified: verify(excerpt),
+        settles_it:
+          clip(f.settles_it, 400).trim() ||
+          (status === "untested" ? "A recorded reading or evidence note is needed before this bet can be coloured." : ""),
+      });
+    }
+    const grounded = bets.filter((b) => b.status !== "untested").length;
+
+    // A delivery colour is offered only when it rests on a verified quotation that
+    // reports progress against the plan; otherwise there is nothing to accept.
+    let delivery: AssessmentProposal["delivery"] = null;
+    const d = parsed.delivery && typeof parsed.delivery === "object" ? (parsed.delivery as Record<string, unknown>) : null;
+    if (d && progressOnFile) {
+      const excerpt = clip(d.excerpt, 600).trim();
+      const rag = oneOf(d.rag, DELIVERY_RAGS, "unrated");
+      const verified = verify(excerpt);
+      if (rag !== "unrated" && verified === true && PROGRESS.test(excerpt)) {
+        delivery = {
+          rag,
+          basis: clip(d.basis, 800).trim(),
+          source_label: clip(d.source_label, 200).trim(),
+          rests_on: clip(d.rests_on, 400).trim(),
+          excerpt,
+          excerpt_verified: true,
+        };
+      }
+    }
+
+    return {
+      ok: true as const,
+      proposal: { delivery, bets, grounded, desk_only: bets.length - grounded, progress_on_file: delivery !== null },
+    };
   });

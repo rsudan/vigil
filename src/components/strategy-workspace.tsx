@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Settings2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { toast } from "sonner";
-import { getStrategyBundle, updateStrategy } from "@/lib/server/strategies";
+import { getStrategyBundle } from "@/lib/server/strategies";
 import { analyzeAllCategories, type CategoryResult } from "@/lib/category-analysis";
 import { analysisMarkdown, revisionBriefMarkdown } from "@/lib/brief";
+import { validityOf } from "@/lib/compute";
+import { deliveryWord } from "@/lib/glossary";
 import { BUDGET, PRESSURE_RANGE, categoryById } from "@/lib/taxonomy";
 import type { StrategyBundle } from "@/lib/types";
 import { ColorLegend, GlossaryStrip, PageGuide, PressureReading, PressureScale } from "./explain";
@@ -18,8 +19,9 @@ import { AssumptionDetail, NewAssumptionForm } from "./workspace/assumption-deta
 import { PeersView } from "./workspace/peers-view";
 import { QueueView } from "./workspace/queue-view";
 import { ReviewView } from "./workspace/review-view";
+import { AssessDialog } from "./workspace/assess-dialog";
+import { AssessmentCard } from "./workspace/assessment-card";
 import { SettingsDialog } from "./workspace/settings-dialog";
-import { NativeSelect } from "./workspace/shared";
 import { canEdit, day, downloadText, pct, statusTone, useRefresh } from "./workspace/util";
 import { SignalDetail } from "./workspace/signal-detail";
 import { SignalForm } from "./workspace/signal-form";
@@ -40,10 +42,8 @@ const VIEW_LABEL: Record<View, string> = {
   team: "Team",
 };
 
-function Rag({ value }: { value: string }) {
-  const tone =
-    value === "green" ? "holding" : value === "amber" ? "weakening" : value === "red" ? "broken" : "untested";
-  return <Badge tone={tone}>{value}</Badge>;
+function ragTone(value: string) {
+  return value === "green" ? "holding" : value === "amber" ? "weakening" : value === "red" ? "broken" : "untested";
 }
 
 export function StrategyWorkspace({ id }: { id: number }) {
@@ -73,6 +73,7 @@ export function StrategyWorkspace({ id }: { id: number }) {
   const assumption = bundle.assumptions.find((a) => a.id === selectedAssumption) ?? null;
   const signal = bundle.signals.find((s) => s.id === selectedSignal) ?? null;
   const m = bundle.metrics;
+  const validity = validityOf(bundle.assumptions);
 
   return (
     <div className="space-y-6">
@@ -91,25 +92,10 @@ export function StrategyWorkspace({ id }: { id: number }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Rag value={bundle.strategy.delivery_rag} />
-          {editable ? (
-            <NativeSelect
-              className="w-auto"
-              value={bundle.strategy.delivery_rag}
-              onChange={(e) =>
-                updateStrategy({
-                  data: { id, delivery_rag: e.target.value as StrategyBundle["strategy"]["delivery_rag"] },
-                })
-                  .then(refresh)
-                  .catch((err: Error) => toast.error(err.message))
-              }
-            >
-              <option value="unrated">Delivery unrated — M&E not scored</option>
-              <option value="green">Delivery green — plan is on track</option>
-              <option value="amber">Delivery amber — slippage, plan still stands</option>
-              <option value="red">Delivery red — published plan has failed</option>
-            </NativeSelect>
-          ) : null}
+          <Badge tone={ragTone(bundle.strategy.delivery_rag)}>
+            Delivery {deliveryWord(bundle.strategy.delivery_rag).toLowerCase()}
+          </Badge>
+          <Badge tone={ragTone(validity.rag)}>Validity {validity.label.toLowerCase()}</Badge>
           {editable ? (
             <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
               <Settings2 className="size-4" /> Settings
@@ -184,6 +170,8 @@ export function StrategyWorkspace({ id }: { id: number }) {
             setFocusCategory(cid);
             setView("categories");
           }}
+          onOpenQueue={() => setView("queue")}
+          onChanged={refresh}
         />
       )}
       {view === "categories" && (
@@ -235,13 +223,18 @@ function Overview({
   bundle,
   onOpenAssumption,
   onOpenCategory,
+  onOpenQueue,
+  onChanged,
 }: {
   bundle: StrategyBundle;
   onOpenAssumption: (id: number) => void;
   onOpenCategory: (id: number) => void;
+  onOpenQueue: () => void;
+  onChanged: () => void;
 }) {
   const m = bundle.metrics;
   const rooms = analyzeAllCategories(bundle);
+  const [assessing, setAssessing] = useState(false);
   return (
     <div className="space-y-6">
       <PageGuide title="How to read this page">
@@ -258,25 +251,23 @@ function Overview({
       <PageGuide title="Methodology">
         <MethodologySection compact />
       </PageGuide>
-      <GlossaryStrip ids={["assumption", "sentinel", "crossed", "interrupt", "cliff", "delivery", "validity", "coverage", "budget", "pressure"]} />
+      <PageGuide title="Terms used on this page">
+        <GlossaryStrip ids={["assumption", "sentinel", "crossed", "interrupt", "cliff", "delivery", "validity", "coverage", "budget", "pressure"]} />
+      </PageGuide>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Stat label="Assumptions" value={String(bundle.assumptions.length)} sub="load-bearing bets the strategy depends on" />
         <Stat
-          label="Assumption integrity"
-          value={`${m.holding} holding`}
-          sub={`${m.weakening} weakening · ${m.broken} broken · ${m.untested} untested of ${bundle.assumptions.length}`}
-        />
-        <Stat label="Coverage" value={pct(m.coverage_ratio)} sub="share of assumptions with a live sentinel" />
-        <Stat
-          label="Signal budget"
-          value={`${m.active_signals} / ${BUDGET.maxActiveSignals}`}
-          sub={`${m.sentinel_count} / ${BUDGET.maxSentinels} sentinels · ${m.stale_count} stale · ${m.crossed_count} crossed`}
+          label="Sentinels"
+          value={String(m.sentinel_count)}
+          sub={`checked every cycle, of ${BUDGET.maxSentinels} allowed · ${pct(m.coverage_ratio)} of bets covered`}
         />
         <Stat
-          label="Interrupts"
-          value={`${m.open_interrupts} open`}
-          sub={m.overdue_interrupts ? `${m.overdue_interrupts} past the review deadline` : `${bundle.interrupts.length} red lines armed or closed`}
+          label="Signals"
+          value={String(m.active_signals)}
+          sub={`active watchpoints, sentinels included, of ${BUDGET.maxActiveSignals} allowed`}
         />
+        <Stat label="Interrupts" value={String(bundle.interrupts.length)} sub="red lines agreed in advance" />
         <Stat
           label="Next cliff"
           value={m.days_to_cliff == null ? "None" : `${m.days_to_cliff}d`}
@@ -284,22 +275,15 @@ function Overview({
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Delivery versus validity</CardTitle>
-          <CardDescription>
-            Delivery is existing M&E (did we do the plan?). Validity is whether the bets still hold. The
-            dangerous cell is green delivery over a weakening logic — on track and already wrong.
-          </CardDescription>
-        </CardHeader>
-        <CardBody className="space-y-3">
-          <Strip label="Delivery (existing M&E)" tone={bundle.strategy.delivery_rag} />
-          <Strip
-            label="Validity (assumption integrity)"
-            tone={m.broken ? "red" : m.weakening ? "amber" : m.holding ? "green" : "unrated"}
-          />
-        </CardBody>
-      </Card>
+      <AssessmentCard
+        bundle={bundle}
+        onAssess={() => setAssessing(true)}
+        onOpenAssumption={onOpenAssumption}
+        onOpenQueue={onOpenQueue}
+      />
+      {assessing ? (
+        <AssessDialog bundle={bundle} open={assessing} onOpenChange={setAssessing} onSaved={onChanged} />
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -413,22 +397,6 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
         <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
       </CardBody>
     </Card>
-  );
-}
-
-function Strip({ label, tone }: { label: string; tone: string }) {
-  const bg =
-    tone === "green" ? "bg-holding" : tone === "amber" ? "bg-weakening" : tone === "red" ? "bg-broken" : "bg-muted";
-  return (
-    <div>
-      <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        <span className="uppercase">{tone}</span>
-      </div>
-      <div className="h-2 rounded-full bg-muted">
-        <div className={`h-2 w-full rounded-full ${bg}`} />
-      </div>
-    </div>
   );
 }
 

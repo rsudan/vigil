@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { DAY, RANK, buildMetrics, buildQueue, latestDecisions, withPressure } from "./compute.ts";
+import { DAY, RANK, buildMetrics, buildQueue, cellReading, latestDecisions, validityOf, withPressure } from "./compute.ts";
 import type { Assumption, Cliff, Decision, Interrupt, Signal, Strategy } from "./types.ts";
 
 const NOW = Date.parse("2026-09-02T12:00:00Z");
@@ -230,5 +230,40 @@ describe("buildMetrics", () => {
     assert.equal(m.overdue_interrupts, 1);
     assert.equal(m.crossed_count, 1, "parked signals do not count");
     assert.equal(m.active_signals, 1);
+  });
+});
+
+describe("validityOf", () => {
+  const s = (statuses: Assumption["status"][]) => statuses.map((status) => ({ status }));
+  it("is red with any broken bet and amber with any weakening bet", () => {
+    assert.equal(validityOf(s(["holding", "broken", "weakening"])).level, "broken");
+    assert.equal(validityOf(s(["holding", "weakening", "untested"])).level, "weakening");
+    assert.equal(validityOf(s(["holding", "weakening", "untested"])).rag, "amber");
+  });
+  it("is green only when every bet has been checked and holds", () => {
+    assert.equal(validityOf(s(["holding", "holding"])).rag, "green");
+    const partly = validityOf(s(["holding", "untested", "untested"]));
+    assert.equal(partly.level, "partly-checked");
+    assert.equal(partly.rag, "unrated");
+    assert.match(partly.reason, /1 of 3 bets checked/);
+  });
+  it("is not assessed with no checked bets, and says so when there are no bets at all", () => {
+    assert.equal(validityOf(s(["untested", "untested"])).level, "not-assessed");
+    assert.match(validityOf([]).reason, /No bets named yet/);
+  });
+});
+
+describe("cellReading", () => {
+  it("names the dangerous cell and counts the weakening bets", () => {
+    const v = validityOf([{ status: "holding" }, { status: "weakening" }, { status: "weakening" }]);
+    assert.match(cellReading("green", v), /dangerous cell/);
+    assert.match(cellReading("green", v), /2 bets weakening/);
+  });
+  it("reads the half-assessed cases honestly", () => {
+    const untested = validityOf([{ status: "untested" }]);
+    assert.match(cellReading("unrated", untested), /Not yet assessed/);
+    assert.match(cellReading("amber", untested), /delivery score, not a strategy assessment/);
+    const amber = validityOf([{ status: "weakening" }]);
+    assert.match(cellReading("unrated", amber), /delivery has not been scored/);
   });
 });

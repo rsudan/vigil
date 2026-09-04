@@ -29,11 +29,11 @@ export const TERMS = {
   },
   delivery: {
     title: "Delivery",
-    body: "Existing M&E: did we do the plan? Green / amber / red / unrated. This is the colour of the action plan, not of the strategy’s logic.",
+    body: "Existing M&E: did we do the plan? Green / amber / red / not rated, always with the report it rests on. This is the colour of the action plan, not of the strategy’s logic.",
   },
   validity: {
     title: "Validity",
-    body: "Are the load-bearing bets still true? Holding / weakening / broken / untested. A strategy can be on track (green delivery) and already wrong (weakening validity). That cell is the one to fear.",
+    body: "Are the load-bearing bets still true? Derived from the bets, never set by hand: Not assessed (no bet checked) / Partly checked (some hold, the rest unchecked) / Holding (every bet checked and holds) / Weakening / Broken. A strategy can be on track (green delivery) and already wrong (weakening validity). That cell is the one to fear.",
   },
   coverage: {
     title: "Coverage",
@@ -99,8 +99,41 @@ export const STATUS_HELP = [
 ];
 
 export const RAG_HELP = [
-  { id: "green", meaning: "On track against the published plan." },
-  { id: "amber", meaning: "Slippage, but the plan is still the plan." },
-  { id: "red", meaning: "Delivery has failed the published plan." },
-  { id: "unrated", meaning: "Nobody has scored existing M&E yet." },
+  { id: "green", label: "Green", meaning: "On track against the published plan." },
+  { id: "amber", label: "Amber", meaning: "Slippage, but the plan is still the plan." },
+  { id: "red", label: "Red", meaning: "Delivery has failed the published plan." },
+  { id: "unrated", label: "Not rated", meaning: "Nobody has scored the plan against its timetable yet." },
 ];
+
+/** The one word for a delivery colour, everywhere it is shown. */
+export function deliveryWord(rag: string) {
+  return RAG_HELP.find((r) => r.id === rag)?.label ?? rag;
+}
+
+/** The five states validity can be in, derived from the bets. One word per state, used everywhere. */
+export const VALIDITY_HELP = {
+  "not-assessed": { label: "Not assessed", meaning: "No bet has been checked yet." },
+  "partly-checked": { label: "Partly checked", meaning: "Some bets hold; the rest have not been checked." },
+  holding: { label: "Holding", meaning: "Every bet holds." },
+  weakening: { label: "Weakening", meaning: "Evidence is moving against the plan." },
+  broken: { label: "Broken", meaning: "At least one bet is false." },
+} as const;
+
+/**
+ * One sentence per cell of delivery × validity when both are coloured. These are
+ * method statements in the author's voice: edit them here, not in components.
+ * {weakening} and {s} are filled in from the count of weakening bets.
+ */
+export const CELL_READINGS: Record<string, string> = {
+  "green/green": "On track, and still the right plan. Keep watching.",
+  "green/amber":
+    "On track, and already wrong: activity is proceeding while the logic weakens ({weakening} bet{s} weakening). This is the dangerous cell.",
+  "green/red": "On track against a plan whose logic is broken. Doing the plan well will not help. Reopen the document.",
+  "amber/green": "Slipping, but the bets hold. A delivery problem, not a strategy problem: fix the execution, not the logic.",
+  "amber/amber": "Slipping, and the logic is moving. Amend before the next sitting.",
+  "amber/red": "Slipping, and a bet is broken. The pre-committed intensity applies.",
+  "red/green":
+    "The plan has failed on its own terms while its bets still hold. Re-plan the delivery; the strategy’s logic survives.",
+  "red/amber": "Delivery has failed and the logic is weakening. A refresh is likely.",
+  "red/red": "Delivery has failed and the logic is broken. As written, the document is the wrong instrument. Reset is on the table.",
+};

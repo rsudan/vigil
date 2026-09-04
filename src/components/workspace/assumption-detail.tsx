@@ -13,10 +13,14 @@ import { Textarea } from "../ui/textarea";
 import { Field, NativeSelect } from "./shared";
 import { canEdit, day, statusTone } from "./util";
 
-type Direction = "supporting" | "weakening";
+type Direction = "supporting" | "weakening" | "neutral";
 
 function defaultDirection(status: Assumption["status"]): Direction {
-  return status === "holding" || status === "untested" ? "supporting" : "weakening";
+  return status === "holding" ? "supporting" : status === "untested" ? "neutral" : "weakening";
+}
+
+function directionTone(direction: Direction) {
+  return direction === "supporting" ? "holding" : direction === "weakening" ? "weakening" : "untested";
 }
 
 export function AssumptionDetail({
@@ -161,6 +165,7 @@ export function AssumptionDetail({
               >
                 <option value="supporting">supports the bet</option>
                 <option value="weakening">weakens the bet</option>
+                <option value="neutral">a note, neither way</option>
               </NativeSelect>
             </Field>
             <Field label="Source URL" htmlFor="asm-source">
@@ -174,7 +179,7 @@ export function AssumptionDetail({
           </div>
           <Button
             size="sm"
-            disabled={save.isPending || (changed ? note.trim().length < 3 : !note.trim())}
+            disabled={save.isPending || (changed ? note.trim().length < 10 : !note.trim())}
             onClick={() => save.mutate()}
           >
             {changed ? `Set to ${status} and record evidence` : "Record evidence"}
@@ -207,9 +212,10 @@ export function AssumptionDetail({
             {evidence.map((e) => (
               <li key={e.id} className="rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge tone={e.direction === "supporting" ? "holding" : "weakening"}>{e.direction}</Badge>
+                  <Badge tone={directionTone(e.direction)}>{e.direction === "neutral" ? "note" : e.direction}</Badge>
                   <span>{day(e.created_at)}</span>
                   {e.author ? <span>· {e.author}</span> : null}
+                  {e.method === "desk" ? <Badge>model-drafted</Badge> : null}
                 </div>
                 <p className="mt-2">{e.note}</p>
                 {e.source_url ? (

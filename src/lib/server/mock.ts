@@ -7,7 +7,7 @@
  */
 export const MOCK_KEY = "mock";
 
-export type MockTask = "extract" | "consolidate" | "draft" | "peers" | "ping" | "generic";
+export type MockTask = "extract" | "consolidate" | "draft" | "peers" | "assess" | "ping" | "generic";
 
 export function mockEnabled() {
   return process.env.VIGIL_LLM_MOCK === "1" && process.env.NODE_ENV !== "production";
@@ -240,6 +240,59 @@ function mockPeers(prompt: string): string {
   });
 }
 
+/** Proposes from what the prompt says is on file: notes and readings colour a bet; the text alone never does. */
+function mockAssess(prompt: string): string {
+  const betsBlock = section(prompt, "BETS:").split("PASSAGES:")[0] ?? "";
+  const passages = section(prompt, "PASSAGES:");
+  const bets: Record<string, unknown>[] = [];
+  for (const block of betsBlock.split(/^(?=BET \d+:)/m)) {
+    const head = block.match(/^BET (\d+): (.+)/);
+    if (!head) continue;
+    const id = Number(head[1]);
+    const now = block.match(/status now: (\w+)/)?.[1] ?? "untested";
+    const supporting = Number(block.match(/on file: (\d+) supporting/)?.[1] ?? 0);
+    const weakening = Number(block.match(/, (\d+) weakening note/)?.[1] ?? 0);
+    const crossed = block.match(/crossed (\w+)/)?.[1];
+    const readings = /linked readings: (?!none)/.test(block);
+    let status = "untested";
+    let restsOn = "The document alone";
+    if (now === "broken" && weakening) {
+      status = "broken";
+      restsOn = "the weakening note on file";
+    } else if (weakening || crossed) {
+      status = "weakening";
+      restsOn = crossed ? `a linked reading that crossed the ${crossed} threshold` : "the weakening note on file";
+    } else if (supporting || readings) {
+      status = "holding";
+      restsOn = supporting ? "the supporting note on file" : "a linked reading";
+    }
+    bets.push({
+      assumption_id: id,
+      status,
+      note: status === "untested" ? "" : `Desk reading: ${restsOn} supports ${status}.`,
+      rests_on: restsOn,
+      excerpt: "NOT IN TEXT",
+      settles_it: status === "untested" ? "A dated reading from the owner before the next sitting would settle this bet." : "",
+    });
+  }
+  // Quote a real sentence that reports progress, so the server's verification can pass.
+  const reported = sentencesOf(passages.replace(/^###.*$/gm, "")).find(
+    (s) => /\d/.test(s) && /(percent|%|delivered|completed|on track|absorption|behind schedule)/i.test(s),
+  );
+  return JSON.stringify({
+    delivery: reported
+      ? {
+          rag: "amber",
+          basis: `Stored document reports: ${reported}`,
+          source_label: "Stored document, reported figures",
+          rests_on: "a reported figure in the stored text",
+          excerpt: reported,
+        }
+      : { rag: "unrated", basis: "No progress report on file.", source_label: "", rests_on: "", excerpt: "NOT IN TEXT" },
+    bets,
+  });
+}
+
 export function mockChat(task: MockTask, prompt: string): string {
   switch (task) {
     case "extract":
@@ -250,6 +303,8 @@ export function mockChat(task: MockTask, prompt: string): string {
       return mockDraft(prompt);
     case "peers":
       return mockPeers(prompt);
+    case "assess":
+      return mockAssess(prompt);
     case "ping":
       return "pong";
     default:

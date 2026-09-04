@@ -40,6 +40,10 @@ export const ROMANIA_SEED = {
     horizon_start: "2024-01-01",
     horizon_end: "2035-12-31",
     delivery_rag: "amber" as const,
+    delivery_basis:
+      "2025 PNRRD progress note: Annex 1 studies and national-level measures delivered on the published calendar; county-level actions and the DesInventar rollout slipping by two or more quarters.",
+    delivery_source: "PNRRD annual progress note 2025",
+    delivery_as_of: "2025-12-31",
   },
   assumptions: [
     {

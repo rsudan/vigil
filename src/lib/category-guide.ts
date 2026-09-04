@@ -37,7 +37,7 @@ export const CATEGORY_GUIDE = [
     why: "This is ordinary monitoring. It matters. It is not the same as asking whether the plan is still the right plan.",
     looksFor: "Outputs, milestones, annex lines, delayed studies, slipped trainings.",
     example: "Romania: Annex 1 completion against the published timetable.",
-    ifEmpty: "Nobody is scoring the published plan. Delivery is unrated, not green.",
+    ifEmpty: "Nobody is scoring the published plan. Delivery is not rated, not green.",
   },
   {
     id: 5,
