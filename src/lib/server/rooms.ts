@@ -44,6 +44,9 @@ export const readDocumentIntoRooms = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(validate(schema.read))
   .handler(async ({ context, data }) => {
+    // Free of money, not of work: a full read is about half a second on a very
+    // long strategy, so it is bounded like the other bulk operations.
+    assertRateLimit(context.userId, "ingest");
     const sql = await getSql();
     await assertAccess(context.userId, data.strategy_id, "editor", sql);
     // Every passage keeps the id of the document it was quoted from, not of the
