@@ -1,22 +1,14 @@
-import { analyzeAllCategories } from "./category-analysis.ts";
+import { analyzeAllCategories, verdictWord } from "./category-analysis.ts";
 import { cellReading, thresholdText, validityOf } from "./compute.ts";
 import { PRESSURE_RANGE, categoryById, INTENSITIES } from "./taxonomy.ts";
 import { TERMS, deliveryWord } from "./glossary.ts";
 import { methodSummaryMarkdown } from "./methodology.ts";
 import type { Amendment, PeerResearch, StrategyBundle } from "./types.ts";
 import { categoryGuide } from "./category-guide.ts";
+import { day } from "./day.ts";
 
 function line(s: string) {
   return s.replace(/\s+/g, " ").trim();
-}
-
-function day(value: string | null | undefined) {
-  if (!value) return "—";
-  const t = new Date(value);
-  if (Number.isNaN(t.getTime())) return value;
-  // Date-only values (cliffs, horizons) are already a calendar day; timestamps show the local day.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  return t.toLocaleDateString("en-CA");
 }
 
 function snapshot(bundle: StrategyBundle) {
@@ -137,12 +129,9 @@ export function analysisMarkdown(bundle: StrategyBundle) {
     parts.push(`### ${r.id}. ${r.short} — ${r.name}`);
     parts.push(r.question);
     parts.push("");
-    parts.push(
-      `Pressure: ${r.pressure == null ? "none (gap)" : `${r.pressure}/${PRESSURE_RANGE.max} (${r.verdict})`}`,
-    );
+    parts.push(`Pressure: ${r.pressure == null ? "none" : `${r.pressure}/${PRESSURE_RANGE.max}`} · verdict: ${verdictWord(r.verdict)}`);
     parts.push(`Reading: ${r.reading}`);
     if (r.also) parts.push(r.also);
-    if (r.reviewed) parts.push(`Reviewed ${day(r.reviewed.at)}${r.reviewed.author ? ` by ${r.reviewed.author}` : ""}: nothing to watch.`);
     if (r.signals.length) {
       parts.push("Watchpoints:");
       for (const sig of r.signals) {

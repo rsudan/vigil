@@ -44,6 +44,17 @@ function iso(t: number) {
 }
 
 /**
+ * Whole days from the start of today to a calendar date, in UTC, so a cliff
+ * turns over at midnight rather than at noon. Shared by the queue, the rooms
+ * and the metrics so they never report a different number of days.
+ */
+export function daysUntil(date: string | null | undefined, now: number): number {
+  const t = at(date);
+  if (!Number.isFinite(t)) return Number.NaN;
+  return Math.round((t - (now - (now % DAY))) / DAY);
+}
+
+/**
  * Latest decision per queue-item key. Rows logged before item keys existed are
  * keyed by the ids they carried, so an old decision on an assumption or signal
  * still counts.
@@ -257,7 +268,7 @@ export function buildQueue(input: {
   for (const c of input.cliffs) {
     const t = at(c.cliff_date);
     if (!Number.isFinite(t)) continue;
-    const days = Math.round((t - now) / DAY);
+    const days = daysUntil(c.cliff_date, now);
     if (days > 180) continue;
     if (days < 0) {
       push({
@@ -349,7 +360,7 @@ export function buildMetrics(input: {
     queue_suppressed: input.queue.suppressed,
     open_interrupts: open.length,
     overdue_interrupts: overdue.length,
-    days_to_cliff: nextCliff ? Math.round((nextCliff.t - now) / DAY) : null,
+    days_to_cliff: nextCliff ? daysUntil(nextCliff.c.cliff_date, now) : null,
     next_cliff_name: nextCliff?.c.name ?? null,
   };
 }

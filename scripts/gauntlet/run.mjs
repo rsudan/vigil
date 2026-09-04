@@ -284,7 +284,7 @@ async function main() {
   await step("rooms place red lines and cliffs; an unwatched room can be recorded as reviewed", async () => {
     await tab(page, "Categories");
     const mandate = page.locator('article[data-room="6"]');
-    await mandate.getByText("Coordinating body stops sitting").waitFor();
+    await mandate.locator("li", { hasText: "Coordinating body stops sitting" }).waitFor();
     await mandate.getByText(/red line · armed/).waitFor();
     const resources = page.locator('article[data-room="5"]');
     await resources.getByText(/Funding window closes/).first().waitFor();

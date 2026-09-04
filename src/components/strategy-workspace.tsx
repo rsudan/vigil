@@ -9,6 +9,7 @@ import {
   analyzeAllCategories,
   roomsWithoutWatchpoint,
   unwatchedBets,
+  verdictWord,
   type CategoryResult,
 } from "@/lib/category-analysis";
 import { analysisMarkdown, revisionBriefMarkdown } from "@/lib/brief";
@@ -301,8 +302,8 @@ function Overview({
             Ten rooms. The number is the pressure of the hottest watchpoint in that room, on a scale of{" "}
             {PRESSURE_RANGE.min} to {PRESSURE_RANGE.max}: how much it matters, how fast it can move, and how little
             you trust the current figure. A dash means nothing is being watched there — a gap, not calm. The word
-            under it is the room’s verdict, which also counts fired red lines, crossed thresholds, broken bets and
-            cliffs. Click a tile to open that room.
+            under it is the room’s verdict, which also counts fired red lines, crossed thresholds, broken or
+            weakening bets, and cliffs that have passed or fall inside 180 days. Click a tile to open that room.
           </CardDescription>
         </CardHeader>
         <CardBody className="space-y-4">
@@ -318,7 +319,7 @@ function Overview({
                 <p className="text-xs text-muted-foreground">{r.short}</p>
                 {r.hottest ? <PressureReading value={r.hottest.pressure} /> : <p className="mt-1 font-mono text-lg">—</p>}
                 <Badge tone={verdictTone(r.verdict)} className="mt-1">
-                  {r.verdict === "gap" ? "no watchpoint" : r.verdict}
+                  {verdictWord(r.verdict)}
                 </Badge>
                 <p className="mt-1 truncate text-xs text-muted-foreground" title={r.headline}>
                   {r.headline}
@@ -457,8 +458,8 @@ function CategoriesView({
           </li>
           <li>
             <strong>Bets</strong> have no room of their own. A bet is shown in a room through the watchpoint that
-            tests it, so a bet in the wrong room means the wrong watchpoint is linked to it. A bet with no active
-            watchpoint sits in no room at all.
+            tests it, so a bet in the wrong room means either the wrong watchpoint is linked to it, or that
+            watchpoint is in the wrong room. A bet with no active watchpoint sits in no room at all.
           </li>
           <li>
             <strong>Red lines</strong> sit in the room they were given on the Review tab. One with no room is filed
@@ -470,9 +471,11 @@ function CategoriesView({
           </li>
         </ul>
         <p>
-          A room’s verdict rests on dated facts only: a fired red line, a crossed threshold, a broken or weakening
-          bet watched from the room, a cliff that has passed or is inside 180 days, then the pressure of the hottest
-          watchpoint. A room with no watchpoint is a gap, not calm, even when a red line is armed there.
+          A room’s verdict rests on the register, strongest first: a fired red line, a crossed threshold, a broken
+          or weakening bet watched from the room, a cliff that has passed or is inside 180 days. Failing all of
+          those, it is the pressure band of the hottest watchpoint. The reading names whichever of them the queue
+          ranks highest, so the room and the queue never tell a different story. A room with no watchpoint is a gap,
+          not calm, even when a red line is armed there.
         </p>
         <PressureScale />
       </PageGuide>
@@ -517,7 +520,7 @@ function CategoriesView({
               <div className="w-36 shrink-0">
                 {r.pressure != null ? <PressureReading value={r.pressure} /> : <p className="font-mono text-lg">—</p>}
                 <Badge tone={verdictTone(r.verdict)} className="mt-2" data-verdict={r.verdict}>
-                  {r.verdict === "gap" ? "no watchpoint" : r.verdict}
+                  {verdictWord(r.verdict)}
                 </Badge>
               </div>
             </div>
@@ -528,7 +531,7 @@ function CategoriesView({
             </p>
             <p className="mt-2 text-xs text-muted-foreground">Look for: {r.looksFor}</p>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Watchpoints in this room</p>
                 {r.signals.length ? (
@@ -644,7 +647,7 @@ function RoomReviewForm({ strategyId, room, onLogged }: { strategyId: number; ro
     <div className="mt-4 rounded-md border border-border p-3">
       <p className="text-xs text-muted-foreground">
         {room.reviewed
-          ? `Reviewed on ${day(room.reviewed.at)}${room.reviewed.author ? ` by ${room.reviewed.author}` : ""}: “${room.reviewed.rationale}”. The record stands for ${ROOM_REVIEW_DAYS} days. It does not make the room watched.`
+          ? `Reviewed on ${day(room.reviewed.at)}${room.reviewed.author ? ` by ${room.reviewed.author}` : ""}: “${room.reviewed.rationale}”. The room cites it for ${ROOM_REVIEW_DAYS} days and then asks again; the log keeps it. It does not make the room watched.`
           : "If you looked at this room and there is nothing to watch, say so. The record is dated and attributed, goes to the decision log, and does not make the room watched."}
       </p>
       <div className="mt-2 flex flex-wrap items-end gap-2">
@@ -886,9 +889,10 @@ function LogView({ bundle }: { bundle: StrategyBundle }) {
     <div className="space-y-4">
       <PageGuide title="What the log is">
         <p>
-          Every decision logged from the queue is written here with who logged it, and cannot be edited. It is
-          the proof that the document is living: why you amended Chapter 8, why you did not reset after a flood
-          season. A decision clears its queue item until the underlying condition changes again.
+          Every decision logged from the queue, and every room recorded as reviewed, is written here with who
+          logged it, and cannot be edited. It is the proof that the document is living: why you amended Chapter 8,
+          why you did not reset after a flood season. A decision clears its queue item until the underlying
+          condition changes again.
         </p>
       </PageGuide>
       {!bundle.decisions.length ? (
