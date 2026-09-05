@@ -212,7 +212,7 @@ export function SignalForm({
           className="min-h-16"
           value={d.false_positive_guard}
           onChange={(e) => set("false_positive_guard", e.target.value)}
-          placeholder="The sentence that stops a local blip being read as national failure."
+          placeholder="The sentence that stops a local blip being read as failure of the whole."
         />
       </Field>
       <Field label="Crossed threshold" htmlFor="sig-crossed" hint="Set from a reading, normally. Reset it here if it was marked in error.">

@@ -498,24 +498,32 @@ function CategoriesView({
           not calm, even when a red line is armed there.
         </p>
         <p>
-          The same ten rooms serve any sector. Three tie-breakers decide the hard cases, so you can check any filing:
+          The same ten rooms serve any sector. Four tie-breakers decide the hard cases, in the same words the
+          extraction is given, so you can check any filing:
         </p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>External, Mandate or Risks</strong> — where a change comes from. Outside the owner’s control and
-            structural: External. Inside its legal or institutional control: Mandate. A dated event that crosses a
-            line, whatever its origin: Risks. The test is who can change the rule: a rule from above is External,
-            the domestic law transposing it is Mandate, a declared emergency is Risks.
+            <strong>External, Mandate or Risks</strong> — where a rule or a change comes from. Made inside the legal
+            order of the jurisdiction named in Settings, by its legislature, government or courts, even when the
+            owner is not the body that makes it: Mandate. Made above or outside that jurisdiction, or a structural
+            trend: External. A dated event that crosses a line, whatever its origin: Risks. A directive from above is
+            External; the domestic law transposing it is Mandate; a declared emergency is Risks.
           </li>
           <li>
-            <strong>Assumptions or Evidence</strong> — mechanism versus practice. Evidence about whether this plan’s
-            own causal chain works: Assumptions, even when it comes from abroad. What another jurisdiction did, or a
-            review of this strategy: Evidence.
+            <strong>Assumptions, Evidence or Delivery</strong> — mechanism, practice, or delivery. Evidence about
+            whether this plan’s own causal chain works: Assumptions, even when it comes from abroad. What another
+            jurisdiction did, or an outcome evaluation or mid-term review judging whether this strategy’s design
+            worked: Evidence. Progress, implementation and audit reports on this strategy: Delivery.
           </li>
           <li>
             <strong>Technology or Opportunity</strong> — capability versus window. A technology development is
             Technology, whether the plan relies on it yet or not. It is Opportunity only when it arrives with a dated
             application or closing window.
+          </li>
+          <li>
+            <strong>Evidence or Opportunity</strong> — learning versus window. What another jurisdiction did or
+            learned is Evidence. It is Opportunity only when it is an instrument or window open to this owner, with
+            a date.
           </li>
         </ul>
         <PressureScale />

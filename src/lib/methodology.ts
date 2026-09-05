@@ -9,7 +9,7 @@ export const METHOD_STEPS = [
   {
     n: "1",
     title: "Name the bets, not the activities",
-    body: "A strategy is a set of claims about the world: that a platform will sit, that money will arrive, that a warning will reach the people it names. Those claims are load-bearing assumptions. If one of them fails, the document has to change. Training two hundred people is an activity. “Counties can deliver the action plan on time” is a bet. You keep five to twelve bets. Twelve is the ceiling so the list stays a spine, not a catalogue.",
+    body: "A strategy is a set of claims about the world: that a platform will sit, that money will arrive, that a service will reach the people it names. Those claims are load-bearing assumptions. If one of them fails, the document has to change. Training two hundred people is an activity. “Counties can deliver the action plan on time” is a bet. You keep five to twelve bets. Twelve is the ceiling so the list stays a spine, not a catalogue.",
   },
   {
     n: "2",
@@ -24,7 +24,7 @@ export const METHOD_STEPS = [
   {
     n: "4",
     title: "Let shocks skip the calendar",
-    body: "Annual reports cannot see an earthquake in month four of a quiet year. An interrupt is a red line agreed in advance — a loss above a threshold, a platform dark for two weeks, a coordinating mandate withdrawn. If it fires, you review within thirty days. A cliff is a dated event that will force a look whether anyone called a meeting: a funding sunset, a legal deadline, a scheduled rewrite window. The calendar still exists. It is no longer the only clock.",
+    body: "Annual reports cannot see a shock in month four of a quiet year. An interrupt is a red line agreed in advance — a loss above a threshold, a platform dark for two weeks, a coordinating mandate withdrawn. If it fires, you review within thirty days. A cliff is a dated event that will force a look whether anyone called a meeting: a funding sunset, a legal deadline, a scheduled rewrite window. The calendar still exists. It is no longer the only clock.",
   },
   {
     n: "5",
@@ -37,7 +37,7 @@ export const METHOD_INTENSITIES = [
   {
     id: "watch",
     title: "Watch",
-    body: "Keep the text. Observe harder. A late county report is a watch, not a rewrite.",
+    body: "Keep the text. Observe harder. A late progress report is a watch, not a rewrite.",
   },
   {
     id: "amend",

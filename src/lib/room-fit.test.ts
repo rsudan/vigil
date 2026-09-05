@@ -14,6 +14,7 @@ function signal(over: Partial<Signal>): Signal {
     threshold_amend: "financing for the action plan cut",
     threshold_refresh: "",
     threshold_reset: "",
+    created_at: "2026-01-15T10:00:00Z",
     ...over,
   } as unknown as Signal;
 }
@@ -40,6 +41,24 @@ describe("roomFits", () => {
       threshold_amend: "not published",
     });
     assert.equal(roomFits([vague]).length, 0);
+  });
+
+  it("needs a clear margin over the watchpoint's own room before it speaks", () => {
+    // Two Resources words, three Mandate words: not enough of a margin.
+    const close = signal({ category: 5, name: "Budget and staff for the ministry council under the law", threshold_watch: "", threshold_amend: "" });
+    assert.equal(roomFits([close]).length, 0, "three against two is within the margin");
+    // A fourth Mandate word clears it.
+    const clear = signal({ category: 5, name: "Budget and staff for the ministry council under the law and its mandate", threshold_watch: "", threshold_amend: "" });
+    const fits = roomFits([clear]);
+    assert.equal(fits.length, 1);
+    assert.equal(fits[0]!.suggested, 6);
+    assert.equal(fits[0]!.own, 2);
+    assert.equal(fits[0]!.hits, 4);
+  });
+
+  it("leaves parked watchpoints and ones filed after the re-scope alone", () => {
+    assert.equal(roomFits([signal({ status: "parked" })]).length, 0);
+    assert.equal(roomFits([signal({ created_at: "2026-09-08T09:00:00Z" })]).length, 0, "filed under the new rooms already");
   });
 
   it("never moves anything: it returns hints, and the signal is untouched", () => {

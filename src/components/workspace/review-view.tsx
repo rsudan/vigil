@@ -119,7 +119,7 @@ function InterruptsCard({ bundle, onChanged }: { bundle: StrategyBundle; onChang
       </CardHeader>
       <CardBody className="space-y-3">
         {bundle.interrupts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No red lines yet. A disaster will be treated as weather.</p>
+          <p className="text-sm text-muted-foreground">No red lines yet. A shock will be treated as weather.</p>
         ) : null}
         {bundle.interrupts.map((i) => {
           const overdue = i.status === "open" && i.review_by && new Date(i.review_by).getTime() < now;

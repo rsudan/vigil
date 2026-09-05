@@ -63,7 +63,7 @@ function Home() {
         <dl className="mt-20 grid gap-8 sm:grid-cols-3">
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">Spine</dt>
-            <dd className="mt-2 font-serif text-xl">5–12 load-bearing assumptions (Romania uses 12)</dd>
+            <dd className="mt-2 font-serif text-xl">5–12 load-bearing assumptions</dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">Budget</dt>

@@ -4,22 +4,33 @@
  * a funding instrument.
  *
  * `terms` is the retrieval vocabulary used to find what the uploaded document
- * says in each room and to build the query a room asks the world.
- * `researchLenses` names the sources a research run for the room must have
- * read, so "nothing found" can be judged against what was looked at.
- * `example` is generic and is shown on the public methodology page.
+ * says in each room; its first eight words also form the query a room asks the
+ * world, so the most searchable words come first. `researchLenses` names the
+ * sources a research run for the room must have read, so "nothing found" can be
+ * judged against what was looked at. `example` is generic and is shown on the
+ * public methodology page.
  *
- * Three tie-breakers decide the hard cases, and are printed on the Categories
- * page so a person can check any filing:
- *   1 vs 6 vs 8: where a change comes from. Outside the owner's control and
- *     structural: 1. Inside its legal or institutional control: 6. A dated
- *     event that crosses a line, whatever its origin: 8. The test is who can
- *     change the rule.
- *   3 vs 9: mechanism versus practice. Evidence about whether this plan's
- *     causal chain works: 3, even from abroad. What another jurisdiction did,
- *     or a review of this strategy: 9.
- *   2 vs 10: capability versus window. A technology development is 2. It is
- *     10 only when it arrives with a dated application or closing window.
+ * Four tie-breakers decide the hard cases. They are printed on the Categories
+ * page and in the extraction prompt in the same words, so a person can check
+ * any filing:
+ *   1 vs 6 vs 8: where a rule or a change comes from. Made inside the legal
+ *     order of the jurisdiction named in Settings, by its legislature,
+ *     government or courts, even when the owner is not the body that makes it:
+ *     6. Made above or outside that jurisdiction, or a structural trend: 1. A
+ *     dated event that crosses a line, whatever its origin: 8. A directive from
+ *     above is 1; the domestic law transposing it is 6; a declared emergency
+ *     is 8.
+ *   3 vs 9 vs 4: mechanism, practice, or delivery. Evidence about whether this
+ *     plan's own causal chain works: 3, even from abroad. What another
+ *     jurisdiction did, or an outcome evaluation or mid-term review judging
+ *     whether this strategy's design worked: 9. Progress, implementation and
+ *     audit reports on this strategy: 4.
+ *   2 vs 10: capability versus window. A technology development is 2, whether
+ *     the plan relies on it yet or not. It is 10 only when it arrives with a
+ *     dated application or closing window.
+ *   9 vs 10: learning versus window. What another jurisdiction did or learned
+ *     is 9. It is 10 only when it is an instrument or window open to this
+ *     owner, with a date.
  */
 export const CATEGORY_GUIDE = [
   {
@@ -27,12 +38,12 @@ export const CATEGORY_GUIDE = [
     short: "External",
     name: "The world outside the plan",
     question: "Has the world this plan was written for moved, including rules set by bodies its owner cannot change?",
-    why: "A plan written for one economy, one demography, one hazard mix and one legal order can become the wrong plan without anyone missing a deadline. Rules the owner does not make, from a regulator, a treaty body or a court above it, arrive from outside and bind all the same.",
-    looksFor: "The context the strategy rests on (demographic and economic projections, the situation analysis) and its commitments to comply with or align to binding rules its owner does not control: supranational regulation and directives, treaty obligations, international standards it must meet. Money and the strings on it are room 5; rules the owner can change are room 6.",
+    why: "A plan written for one economy, one demography, one hazard mix and one legal order can become the wrong plan without anyone missing a deadline. Rules made above or outside the jurisdiction's own legal order, by a regulator, a treaty body or a court it does not control, arrive from outside and bind all the same.",
+    looksFor: "The context the strategy rests on (demographic and economic projections, the situation analysis) and its commitments to comply with or align to binding rules made above or outside the jurisdiction named in Settings: supranational regulation and directives, treaty obligations, international standards it must meet. Money and the strings on it are room 5; rules made inside the jurisdiction's own legal order are room 6.",
     ifEmpty: "You are not watching the outside world or the rule-makers above you. A binding change will arrive as a letter, not as a watchpoint.",
     example: "A directive adopted above the jurisdiction after the strategy imposes a duty the plan never mentions, with a transposition deadline inside the plan's horizon; the population projection the diagnosis rests on is revised downward by the statistics office.",
-    terms: "context environment external trend demographic population migration economy inflation recession employment climate geopolitical conflict directive treaty transposition obligation binding compliance international",
-    researchLenses: "Statistical releases, revisions and forecasts from the national statistics office, the central bank and international bodies; legislation and regulation adopted above the jurisdiction in the sector (official journals, legislative trackers) with their application and transposition dates; treaties and standards adopted since the strategy. Prefer official statistics, official journals and IGO publications; treat commentary as a lead only. A slow trend belongs here; a dated event is room 8; a rule the owner can change is room 6; a non-binding framework is room 9; a funding decision is room 5.",
+    terms: "demographic economic projection forecast trend directive treaty migration context environment external population ageing economy inflation recession employment climate geopolitical conflict transposition obligation binding compliance international",
+    researchLenses: "Statistical releases, revisions and forecasts from the national statistics office, the central bank and international bodies; legislation and regulation adopted above the jurisdiction in the sector (official journals, legislative trackers) with their application and transposition dates; treaties and standards adopted since the strategy. Prefer official statistics, official journals and IGO publications; treat commentary as a lead only. A slow trend belongs here; a dated event is room 8; a rule made inside the jurisdiction's own legal order is room 6; a non-binding framework is room 9; a funding decision is room 5.",
   },
   {
     id: 2,
@@ -43,7 +54,7 @@ export const CATEGORY_GUIDE = [
     looksFor: "Named platforms, registries, portals and data sources and whether they are live and complete; outages and cyber incidents; data availability for the plan's indicators; new technical capabilities that change how an action could be done, make it unnecessary, or create an in-scope risk.",
     ifEmpty: "The plan names systems and nobody is checking whether they are alive, and nobody is asking whether the way the plan proposes to do things is still the sensible way.",
     example: "A capability that did not exist at adoption makes a planned manual service obsolete; the register the plan's indicators depend on stops publishing.",
-    terms: "platform system digital data registry database portal information technology infrastructure interoperability cyber security software artificial intelligence automation algorithm capability tool online model standard obsolete",
+    terms: "platform system data digital technology artificial intelligence capability automation registry database portal information infrastructure interoperability cyber security software algorithm tool online model standard obsolete",
     researchLenses: "Releases, audits and status notices of the named systems; digital-government and IT-agency announcements; security-incident disclosures; statistics-office notes on discontinued or changed series; capability assessments from standards bodies and agency technology reviews, and from major providers only when tied to the sector. Prefer official IT agencies, audit reports and vendor-independent assessments; rank vendor marketing lowest. A development from another jurisdiction counts here when it bears on a named commitment. A new capability is this room's business whether or not the plan yet depends on it; it goes to room 10 only when it comes with a dated application or closing window.",
   },
   {
@@ -68,7 +79,7 @@ export const CATEGORY_GUIDE = [
     ifEmpty: "Nobody is scoring the published plan. Delivery is not rated, not green.",
     example: "The first annual implementation report says four of twelve measures have started; the audit office finds the coordinating body never met.",
     terms: "action plan implementation implementing milestone deadline responsible expected result evaluation stage indicator target output progress report monitoring achieved completed delayed procurement contract tender timetable",
-    researchLenses: "Only material about this strategy's own implementation: the responsible institutions' progress and annual reports, audit-office reports, procurement portals for the named actions, parliamentary questions and answers, budget-execution reports naming the strategy or its programmes. Prefer official reports; a press report of a delay is a lead, not a reading, and is labelled as press. Only this jurisdiction counts. Nothing about the world at large.",
+    researchLenses: "Only material about this strategy's own implementation: the responsible institutions' progress and annual reports, audit-office reports, procurement portals for the named actions, parliamentary questions and answers, budget-execution reports naming the strategy or its programmes. Prefer official reports; a press report of a delay is a lead, not a reading, and is labelled as press. Only this jurisdiction counts. Nothing about the world at large. An outcome evaluation or mid-term review that judges whether this strategy's design worked is room 9; the progress and audit reports are here.",
   },
   {
     id: 5,
@@ -87,7 +98,7 @@ export const CATEGORY_GUIDE = [
     short: "Mandate",
     name: "Who is allowed to act",
     question: "Does the body responsible still have the mandate, the domestic legal frame and the political backing to act, and is it using them?",
-    why: "A strategy without a sitting coordinating body, or whose own legal frame forbids or now requires something the text never foresaw, cannot be delivered by effort alone. Elections and reorganisations change owners without changing the text. This room holds the rules the owner can change; rules set above it sit in room 1.",
+    why: "A strategy without a sitting coordinating body, or whose own legal frame forbids or now requires something the text never foresaw, cannot be delivered by effort alone. Elections and reorganisations change owners without changing the text. This room holds the rules made inside the jurisdiction's own legal order, by its legislature, government or courts, even when the owner is not the body that makes them; rules from above or outside it sit in room 1.",
     looksFor: "The legal basis and adopting instrument, the coordinating body and its composition, responsibilities assigned to named institutions, laws, ordinances and decisions the plan promises to pass or depends on; machinery-of-government changes; elections, coalition programmes and ministerial changes; court rulings in the sector.",
     ifEmpty: "The organogram and the rulebook are unwatched. That is how a strategy dies quietly, or becomes unlawful without anyone noticing.",
     example: "The ministry named as coordinator is merged into another after an election, and the decision that founded the strategy's committee is not carried over.",
@@ -124,11 +135,11 @@ export const CATEGORY_GUIDE = [
     name: "What others have learned",
     question: "Has new evidence, a peer's strategy, a framework we align to or an adjacent plan made our text outdated?",
     why: "A strategy does not live alone. Other jurisdictions adopt instruments ours lacks, evaluations of ours and theirs are published, frameworks the text aligns to are revised, and adjacent domestic strategies change what ours must fit with. Non-binding guidance belongs here; binding rules belong in room 1 or 6.",
-    looksFor: "Commitments to align with named non-binding frameworks, to benchmark, to evaluate and to learn; other jurisdictions' strategies adopted since ours and their evaluations, reviews of this strategy, adjacent domestic strategies, benchmarks, IGO guidance and comparative reviews.",
+    looksFor: "Commitments to align with named non-binding frameworks, to benchmark, to evaluate and to learn; other jurisdictions' strategies adopted since ours and their evaluations, outcome evaluations and mid-term reviews of this strategy (its progress and audit reports are room 4), adjacent domestic strategies, benchmarks, IGO guidance and comparative reviews.",
     ifEmpty: "You will learn what others tried from a conference, not from a watchpoint.",
     example: "A neighbouring jurisdiction's strategy adopted since ours introduces an instrument ours lacks; the framework the plan aligns to publishes a successor with a different indicator set.",
-    terms: "study evaluation report review recommendation guidance comparison benchmark practice peer international regional lesson learned adjacent strategy roadmap framework alignment evidence research",
-    researchLenses: "Peer national or organisational strategies in the same domain adopted since the strategy, and their evaluations; evaluations and mid-term reviews of this strategy; the secretariats of the frameworks the text names; IGO comparative reviews and guidance; adjacent domestic strategies; academic syntheses. Skip the strategy under review itself. This room's peer query deliberately omits the jurisdiction, and it is the only room where a source about another jurisdiction is a finding rather than a re-file. A binding successor instrument is room 1 or 6, not here.",
+    terms: "study evaluation review recommendation guidance comparison benchmark practice peer international regional lesson learned adjacent roadmap alignment evidence research",
+    researchLenses: "Peer national or organisational strategies in the same domain adopted since the strategy, and their evaluations; evaluations and mid-term reviews of this strategy; the secretariats of the frameworks the text names; IGO comparative reviews and guidance; adjacent domestic strategies; academic syntheses. Skip the strategy's own text; its outcome evaluations and mid-term reviews count here, its progress reports are room 4. A research run for this room must leave the jurisdiction out of its peer query and accept sources about other jurisdictions; today's per-room search does neither, which is an open item. What another jurisdiction did is room 9 unless it is an instrument or window open to this owner with a date, which is room 10. A binding successor instrument is room 1 or 6, not here.",
   },
   {
     id: 10,
@@ -136,11 +147,11 @@ export const CATEGORY_GUIDE = [
     name: "Windows you would regret missing",
     question: "Is there a new window, fund, instrument or partnership that would change what this plan should do?",
     why: "Living documents are not only about threat. A new fund, a new instrument, a partnership window can justify an amendment without anything having failed, and windows close on a date.",
-    looksFor: "Pilots, new instruments the plan intends to introduce, partnerships it intends to seek, funding it intends to apply for, options it names but defers; new funds and calls open to this jurisdiction, new instruments and facilities, partnerships and coalitions, technology options presented as options rather than dependencies.",
+    looksFor: "Pilots, new instruments the plan intends to introduce, partnerships it intends to seek, funding it intends to apply for, options it names but defers; new funds and calls open to this jurisdiction, new instruments and facilities, partnerships and coalitions, technology options and peer instruments only when they come with a dated application or closing window.",
     ifEmpty: "The plan can only say no. It has no way to say yes to a new window.",
     example: "A funding call opens for exactly the measure the plan could not finance, closing in four months.",
     terms: "opportunity instrument window programme call grant partnership innovation emerging potential initiative facility new option pilot launch announce eligible closing apply",
-    researchLenses: "Funders' calls and programme launches; new instruments and partnerships open to the jurisdiction; IGO initiatives with an application window; pilots and instruments elsewhere that a named commitment could adopt. Prefer funder portals and official announcements; every finding here should carry a closing date where one exists. A capability the plan already relies on is room 2; a general trend is room 1. A development from elsewhere counts when it bears on a named commitment.",
+    researchLenses: "Funders' calls and programme launches; new instruments and partnerships open to the jurisdiction; IGO initiatives with an application window; pilots and instruments elsewhere that a named commitment could adopt. Prefer funder portals and official announcements; every finding here should carry a closing date where one exists. A capability without a dated window is room 2, whether or not the plan relies on it; what another jurisdiction did without a window open to this owner is room 9; a general trend is room 1. A development from elsewhere counts when it bears on a named commitment.",
   },
 ] as const;
 
