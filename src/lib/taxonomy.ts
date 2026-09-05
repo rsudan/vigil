@@ -119,16 +119,16 @@ export const ENV_KEY_NAME: Partial<Record<ProviderId, string>> = {
 };
 
 export const CATEGORIES = [
-  { id: 1, short: "External", name: "External operating environment" },
-  { id: 2, short: "Technology", name: "Technology, data and digital systems" },
-  { id: 3, short: "Assumptions", name: "Critical assumptions and theory of change" },
-  { id: 4, short: "Delivery", name: "Results and delivery performance" },
-  { id: 5, short: "Resources", name: "Resource envelope and delivery capacity" },
-  { id: 6, short: "Mandate", name: "Political mandate, institutions and legal frame" },
-  { id: 7, short: "Legitimacy", name: "Stakeholder legitimacy, uptake and distributional effects" },
-  { id: 8, short: "Risks", name: "Risk landscape and threshold events" },
-  { id: 9, short: "Evidence", name: "Evidence, peer practice and adjacent strategies" },
-  { id: 10, short: "Opportunity", name: "Emerging opportunities and option value" },
+  { id: 1, short: "External", name: "The world outside the plan" },
+  { id: 2, short: "Technology", name: "The tools, data and capabilities the plan depends on, or ignores" },
+  { id: 3, short: "Assumptions", name: "The story of how change happens" },
+  { id: 4, short: "Delivery", name: "Whether the work is getting done" },
+  { id: 5, short: "Resources", name: "Money and people" },
+  { id: 6, short: "Mandate", name: "Who is allowed to act" },
+  { id: 7, short: "Legitimacy", name: "Who actually benefits" },
+  { id: 8, short: "Risks", name: "Events that should reopen the document" },
+  { id: 9, short: "Evidence", name: "What others have learned" },
+  { id: 10, short: "Opportunity", name: "Windows you would regret missing" },
 ] as const;
 
 export type CategoryId = (typeof CATEGORIES)[number]["id"];
