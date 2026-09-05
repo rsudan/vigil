@@ -45,6 +45,13 @@ export const MIN_TERMS = 2;
  */
 export const MIN_VOCABULARY_SHARE = 0.15;
 /**
+ * Or this many distinct room words, whichever is reached first. A short English
+ * document cannot reach a share of a two-hundred-word vocabulary, but twenty of
+ * its words appearing is proof enough that the language fits; a foreign text
+ * reaches neither, because a cognate or two is all it offers.
+ */
+export const MIN_VOCABULARY_TERMS = 20;
+/**
  * A sentence that answers more rooms than this answers none of them. The guard
  * belongs at the sentence, not the chunk: a well-written chapter legitimately
  * speaks to several rooms, but a sentence that fits everywhere is a foreword.
@@ -288,7 +295,7 @@ export function readRooms(chunks: ReadChunk[]): RoomRead[] {
   const index = new Map(chunks.map((c, i) => [c, i] as const));
   const vocabulary = new Set(CATEGORY_GUIDE.flatMap((g) => tokenize(g.terms).map(fold)));
   const present = [...vocabulary].filter((t) => corpus.has(t)).length;
-  const fits = vocabulary.size > 0 && present / vocabulary.size >= MIN_VOCABULARY_SHARE;
+  const fits = vocabulary.size > 0 && (present / vocabulary.size >= MIN_VOCABULARY_SHARE || present >= MIN_VOCABULARY_TERMS);
 
   // Candidate sentences per room, before anything is chosen.
   const candidates = new Map<number, Candidate[]>();

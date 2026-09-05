@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dial
 import { Textarea } from "./ui/textarea";
 import { AssumptionDetail, NewAssumptionForm } from "./workspace/assumption-detail";
 import { RoomEvidence } from "./workspace/room-evidence";
+import { RoomScopeNotice } from "./workspace/room-scope-notice";
 import { PeersView } from "./workspace/peers-view";
 import { QueueView } from "./workspace/queue-view";
 import { ReviewView } from "./workspace/review-view";
@@ -496,8 +497,30 @@ function CategoriesView({
           ranks highest, so the room and the queue never tell a different story. A room with no watchpoint is a gap,
           not calm, even when a red line is armed there.
         </p>
+        <p>
+          The same ten rooms serve any sector. Three tie-breakers decide the hard cases, so you can check any filing:
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>External, Mandate or Risks</strong> — where a change comes from. Outside the owner’s control and
+            structural: External. Inside its legal or institutional control: Mandate. A dated event that crosses a
+            line, whatever its origin: Risks. The test is who can change the rule: a rule from above is External,
+            the domestic law transposing it is Mandate, a declared emergency is Risks.
+          </li>
+          <li>
+            <strong>Assumptions or Evidence</strong> — mechanism versus practice. Evidence about whether this plan’s
+            own causal chain works: Assumptions, even when it comes from abroad. What another jurisdiction did, or a
+            review of this strategy: Evidence.
+          </li>
+          <li>
+            <strong>Technology or Opportunity</strong> — capability versus window. A technology development is
+            Technology, whether the plan relies on it yet or not. It is Opportunity only when it arrives with a dated
+            application or closing window.
+          </li>
+        </ul>
         <PressureScale />
       </PageGuide>
+      <RoomScopeNotice signals={bundle.signals} onOpenSignal={onOpenSignal} />
 
       <p className="text-sm text-muted-foreground">
         {gaps === 0
@@ -953,7 +976,7 @@ function LogView({ bundle }: { bundle: StrategyBundle }) {
         <p>
           Every decision logged from the queue, and every room recorded as reviewed, is written here with who
           logged it, and cannot be edited. It is the proof that the document is living: why you amended Chapter 8,
-          why you did not reset after a flood season. A decision clears its queue item until the underlying
+          why you did not reset after a bad year. A decision clears its queue item until the underlying
           condition changes again.
         </p>
       </PageGuide>
